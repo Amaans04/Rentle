@@ -2,6 +2,7 @@ import { getDb, COLLECTIONS } from '@/lib/firebase';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '@/lib/logger';
+import { buildPaymentDeepLinkForPg } from '@/services/payment/upi.service';
 
 export interface RentRecordWithTenant {
   id: string;
@@ -73,6 +74,7 @@ export class RentRecordService {
     const pgDoc = await db.collection(COLLECTIONS.PGS).doc(pgId).get();
     const rentDueDate = (pgDoc.data()?.rentDueDate as number) || 1;
     const dueDate = new Date(year, month - 1, rentDueDate);
+    const pgName = (pgDoc.data()?.name as string) || 'Rentle PG';
 
     const tenantsSnapshot = await db
       .collection(COLLECTIONS.TENANTS)
@@ -91,12 +93,28 @@ export class RentRecordService {
         .where('tenantId', '==', tenantData.uid)
         .where('month', '==', month)
         .where('year', '==', year)
-        .limit(1)
+        .limit(20)
         .get();
 
-      if (!existing.empty) continue;
+      const hasRentRecord = existing.docs.some((doc) => {
+        const type = doc.data().chargeType as string | undefined;
+        return !type || type === 'rent';
+      });
+      if (hasRentRecord) continue;
 
       const recordId = uuidv4();
+      const amount = tenantData.rentAmount as number;
+      const note = `Rent ${month}/${year} - ${pgName}`;
+
+      let paymentDeepLink: string | null = null;
+      let paymentProvider: string | null = null;
+      try {
+        paymentDeepLink = await buildPaymentDeepLinkForPg(pgId, amount, note, recordId);
+        paymentProvider = 'upi_deep_link';
+      } catch {
+        logger.warn('rent_records.upi_link_skipped', { pgId, recordId });
+      }
+
       const ref = db.collection(COLLECTIONS.RENT_RECORDS).doc(recordId);
       batch.set(ref, {
         recordId,
@@ -105,12 +123,15 @@ export class RentRecordService {
         roomId: tenantData.roomId,
         month,
         year,
-        amount: tenantData.rentAmount,
+        amount,
         lateFine: 0,
+        chargeType: 'rent',
+        description: note,
         dueDate: Timestamp.fromDate(dueDate),
         status: 'unpaid',
         paymentMethod: null,
-        paymentDeepLink: null,
+        paymentProvider,
+        paymentDeepLink,
         paidAt: null,
         receiptUrl: null,
         createdAt: FieldValue.serverTimestamp(),

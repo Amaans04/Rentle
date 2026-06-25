@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { env } from '@/lib/env';
 import { ValidationError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { getSmsProvider } from '@/integrations/sms.adapter';
 import type { UserRole } from '@/lib/validators';
 
 export interface OtpSession {
@@ -99,7 +100,13 @@ export class OtpService {
       });
       console.log(`[OTP DEV] +91${phone} → ${otp} (requestId: ${requestId}, role: ${role})`);
     } else {
-      // Production: dispatch via SMS provider (injected separately).
+      const sms = getSmsProvider();
+      await sms.send({
+        to: phone,
+        body: `Your Rentle verification code is ${otp}. Valid for ${env.otpExpiryMinutes} minutes.`,
+        templateId: env.msg91OtpTemplateId || undefined,
+        variables: { otp },
+      });
       logger.info('auth.otp.dispatched', { phone, requestId });
     }
 

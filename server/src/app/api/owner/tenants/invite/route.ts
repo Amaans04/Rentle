@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { jsonResponse, handleApiError, parseBody } from '@/lib/api';
+import { jsonResponse, handleApiError, parseBody, getClientIp } from '@/lib/api';
 import { corsHeaders, handleCors } from '@/lib/cors';
 import { authenticateRequest, requireOwnerOrManager } from '@/middleware/auth';
 import { getDb, COLLECTIONS } from '@/lib/firebase';
@@ -12,6 +12,7 @@ import {
 } from '@/lib/validators';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { v4 as uuidv4 } from 'uuid';
+import { writeAuditLog } from '@/repositories/firestore/audit.repository';
 
 export async function OPTIONS(request: NextRequest) {
   return handleCors(request) || new Response(null, { status: 204 });
@@ -103,6 +104,16 @@ export async function POST(request: NextRequest) {
       moveInDate,
       rentAmount,
       depositAmount,
+    });
+
+    await writeAuditLog({
+      organizationId: pgId,
+      userId: user.uid,
+      action: 'CREATE',
+      resource: `tenant_invite:${inviteId}`,
+      metadata: { phone, roomId, tenantName },
+      ipAddress: getClientIp(request),
+      userAgent: request.headers.get('user-agent') || undefined,
     });
 
     const response = jsonResponse({ success: true, inviteId });

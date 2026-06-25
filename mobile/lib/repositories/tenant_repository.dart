@@ -18,6 +18,7 @@ class TenantHomeData {
     this.pg,
     this.room,
     this.currentRent,
+    this.pendingCharges = const [],
     required this.notices,
   });
 
@@ -25,6 +26,7 @@ class TenantHomeData {
   final PgModel? pg;
   final RoomModel? room;
   final RentRecordModel? currentRent;
+  final List<RentRecordModel> pendingCharges;
   final List<NoticeModel> notices;
 }
 
@@ -38,6 +40,9 @@ class TenantRepository {
     final data = response.data!;
     final notices = (data['notices'] as List<dynamic>? ?? [])
         .map((e) => NoticeModel.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+    final pending = (data['pendingCharges'] as List<dynamic>? ?? [])
+        .map((e) => RentRecordModel.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();
     return TenantHomeData(
       user: UserModel.fromJson(
@@ -54,6 +59,7 @@ class TenantRepository {
               Map<String, dynamic>.from(data['currentRent'] as Map),
             )
           : null,
+      pendingCharges: pending,
       notices: notices,
     );
   }
@@ -78,6 +84,17 @@ class TenantRepository {
     if (response.data?['success'] != true) {
       throw Exception(response.data?['error'] ?? 'Failed to mark paid');
     }
+  }
+
+  Future<Map<String, dynamic>> getPaymentLink(String recordId) async {
+    final response = await _api.post<Map<String, dynamic>>(
+      '/api/tenant/payments/pay',
+      data: {'recordId': recordId},
+    );
+    if (response.data?['success'] != true || response.data?['deepLink'] == null) {
+      throw Exception(response.data?['error'] ?? 'Failed to get payment link');
+    }
+    return Map<String, dynamic>.from(response.data!);
   }
 
   Future<void> submitComplaint({

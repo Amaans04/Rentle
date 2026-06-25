@@ -17,6 +17,8 @@ class RentRecordModel {
     this.createdAt,
     this.tenantName,
     this.roomNumber,
+    this.chargeType,
+    this.description,
   });
 
   final String recordId;
@@ -36,6 +38,31 @@ class RentRecordModel {
   final DateTime? createdAt;
   final String? tenantName;
   final String? roomNumber;
+  final String? chargeType;
+  final String? description;
+
+  String get displayTitle {
+    if (description != null && description!.isNotEmpty) return description!;
+    if (chargeType != null && chargeType != 'rent') {
+      return _formatChargeType(chargeType!);
+    }
+    return '${_monthName(month)} $year';
+  }
+
+  static String _monthName(int month) {
+    const names = [
+      '', 'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    return month >= 1 && month <= 12 ? names[month] : 'Month $month';
+  }
+
+  static String _formatChargeType(String type) {
+    return type
+        .split('_')
+        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
+  }
 
   factory RentRecordModel.fromJson(Map<String, dynamic> json) {
     return RentRecordModel(
@@ -56,6 +83,8 @@ class RentRecordModel {
       createdAt: _parseDate(json['createdAt']),
       tenantName: json['tenantName'] as String?,
       roomNumber: json['roomNumber'] as String?,
+      chargeType: json['chargeType'] as String?,
+      description: json['description'] as String?,
     );
   }
 

@@ -1,10 +1,11 @@
 import { NextRequest } from 'next/server';
-import { jsonResponse, handleApiError, parseBody } from '@/lib/api';
+import { jsonResponse, handleApiError, parseBody, getClientIp } from '@/lib/api';
 import { corsHeaders, handleCors } from '@/lib/cors';
 import { authenticateRequest, requireTenant } from '@/middleware/auth';
 import { getDb, COLLECTIONS } from '@/lib/firebase';
 import { requireString, ValidationError } from '@/lib/validators';
 import { FieldValue } from 'firebase-admin/firestore';
+import { writeAuditLog } from '@/repositories/firestore/audit.repository';
 
 export async function OPTIONS(request: NextRequest) {
   return handleCors(request) || new Response(null, { status: 204 });
@@ -40,6 +41,16 @@ export async function POST(request: NextRequest) {
       status: 'paid',
       paymentMethod: method,
       paidAt: FieldValue.serverTimestamp(),
+    });
+
+    await writeAuditLog({
+      organizationId: pgId,
+      userId: user.uid,
+      action: 'PAYMENT',
+      resource: `rent_record:${recordId}`,
+      metadata: { method, amount: data.amount, chargeType: data.chargeType ?? 'rent' },
+      ipAddress: getClientIp(request),
+      userAgent: request.headers.get('user-agent') || undefined,
     });
 
     const response = jsonResponse({ success: true });

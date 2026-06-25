@@ -59,4 +59,10 @@ export const env = {
       `${env.firebaseProjectId}.appspot.com`
     );
   },
+  get msg91AuthKey() {
+    return process.env.MSG91_AUTH_KEY || '';
+  },
+  get msg91OtpTemplateId() {
+    return process.env.MSG91_OTP_TEMPLATE_ID || '';
+  },
 };

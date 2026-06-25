@@ -257,4 +257,26 @@ class OwnerRepository {
   Future<void> generateRentRecords() async {
     await _api.post('/api/owner/rent-records/generate');
   }
+
+  Future<void> createCharge({
+    required String tenantId,
+    required String chargeType,
+    required String description,
+    required double amount,
+    DateTime? dueDate,
+  }) async {
+    final response = await _api.post<Map<String, dynamic>>(
+      '/api/owner/charges',
+      data: {
+        'tenantId': tenantId,
+        'chargeType': chargeType,
+        'description': description,
+        'amount': amount,
+        if (dueDate != null) 'dueDate': dueDate.toIso8601String(),
+      },
+    );
+    if (response.data?['success'] != true) {
+      throw Exception(response.data?['error'] ?? 'Failed to create charge');
+    }
+  }
 }

@@ -1,10 +1,11 @@
 import { NextRequest } from 'next/server';
-import { jsonResponse, handleApiError, parseBody } from '@/lib/api';
+import { jsonResponse, handleApiError, parseBody, getClientIp } from '@/lib/api';
 import { corsHeaders, handleCors } from '@/lib/cors';
 import { authenticateRequest, requireOwner } from '@/middleware/auth';
 import { getDb, COLLECTIONS } from '@/lib/firebase';
 import { requireString, requireNumber, validateRoomType, ValidationError } from '@/lib/validators';
 import { FieldValue } from 'firebase-admin/firestore';
+import { writeAuditLog } from '@/repositories/firestore/audit.repository';
 
 function computeRoomStatus(occupancy: number, capacity: number): string {
   if (occupancy <= 0) return 'vacant';
@@ -69,6 +70,17 @@ export async function PUT(
     await roomRef.update(updates);
 
     const updatedDoc = await roomRef.get();
+
+    await writeAuditLog({
+      organizationId: pgId,
+      userId: user.uid,
+      action: 'UPDATE',
+      resource: `room:${params.roomId}`,
+      metadata: { updates: Object.keys(updates) },
+      ipAddress: getClientIp(request),
+      userAgent: request.headers.get('user-agent') || undefined,
+    });
+
     const response = jsonResponse({
       success: true,
       room: { id: updatedDoc.id, ...updatedDoc.data() },
@@ -125,6 +137,16 @@ export async function DELETE(
     }
 
     await db.collection(COLLECTIONS.ROOMS).doc(params.roomId).delete();
+
+    await writeAuditLog({
+      organizationId: pgId,
+      userId: user.uid,
+      action: 'DELETE',
+      resource: `room:${params.roomId}`,
+      metadata: { roomNumber: roomDoc.data()?.roomNumber },
+      ipAddress: getClientIp(request),
+      userAgent: request.headers.get('user-agent') || undefined,
+    });
 
     const response = jsonResponse({ success: true });
     Object.entries(corsHeaders(request)).forEach(([k, v]) => response.headers.set(k, v));

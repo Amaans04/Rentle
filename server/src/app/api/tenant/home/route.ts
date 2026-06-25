@@ -42,6 +42,27 @@ export async function GET(request: NextRequest) {
 
     const currentRent = rentSnapshot.empty ? null : rentSnapshot.docs[0].data();
 
+    const unpaidSnapshot = await db
+      .collection(COLLECTIONS.RENT_RECORDS)
+      .where('pgId', '==', pgId)
+      .where('tenantId', '==', user.uid)
+      .where('status', '==', 'unpaid')
+      .limit(20)
+      .get();
+
+    type PendingCharge = {
+      id: string;
+      createdAt?: { toMillis?: () => number };
+    };
+
+    const pendingCharges: PendingCharge[] = unpaidSnapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() } as PendingCharge))
+      .sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() ?? 0;
+        const bTime = b.createdAt?.toMillis?.() ?? 0;
+        return bTime - aTime;
+      });
+
     const noticesSnapshot = await db
       .collection(COLLECTIONS.NOTICES)
       .where('pgId', '==', pgId)
@@ -67,6 +88,7 @@ export async function GET(request: NextRequest) {
       pg: pgDoc.exists ? { id: pgDoc.id, ...pgDoc.data() } : null,
       room,
       currentRent,
+      pendingCharges,
       notices,
     });
     Object.entries(corsHeaders(request)).forEach(([k, v]) => response.headers.set(k, v));
