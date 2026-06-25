@@ -1,0 +1,35 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+server/.env
+mobile/.env
+
+# Dependencies
+node_modules/
+server/node_modules/
+
+# Build outputs
+server/.next/
+server/out/
+mobile/build/
+mobile/.dart_tool/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Firebase
+**/google-services.json
+**/GoogleService-Info.plist
+**/serviceAccountKey.json
+
+# Secrets
+*.pem
+*.key
+credentials.json
