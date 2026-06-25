@@ -147,7 +147,6 @@ class _OwnerTenantsScreenState extends ConsumerState<OwnerTenantsScreen> {
                           vertical: 6,
                         ),
                         onTap: () => _openAddCharge(tenant),
-                        onLongPress: () => _openAddCharge(tenant),
                         child: Row(
                           children: [
                             CircleAvatar(
