@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:rentle/core/constants/colors.dart';
 import 'package:rentle/core/utils/api_errors.dart';
 import 'package:rentle/core/widgets/rentle_widgets.dart';
+import 'package:rentle/features/owner/screens/owner_add_charge_screen.dart';
 import 'package:rentle/models/tenant_model.dart';
 import 'package:rentle/repositories/owner_repository.dart';
 
@@ -75,6 +76,14 @@ class _OwnerTenantsScreenState extends ConsumerState<OwnerTenantsScreen> {
     );
   }
 
+  void _openAddCharge(TenantModel tenant) {
+    Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => OwnerAddChargeScreen(tenant: tenant),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tenants = ref.watch(ownerTenantsProvider);
@@ -137,6 +146,8 @@ class _OwnerTenantsScreenState extends ConsumerState<OwnerTenantsScreen> {
                           horizontal: 16,
                           vertical: 6,
                         ),
+                        onTap: () => _openAddCharge(tenant),
+                        onLongPress: () => _openAddCharge(tenant),
                         child: Row(
                           children: [
                             CircleAvatar(

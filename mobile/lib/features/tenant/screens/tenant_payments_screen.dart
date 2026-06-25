@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:rentle/core/constants/colors.dart';
 import 'package:rentle/core/utils/api_errors.dart';
+import 'package:rentle/core/utils/tenant_payment_flow.dart';
 import 'package:rentle/core/widgets/rentle_widgets.dart';
 import 'package:rentle/models/rent_record_model.dart';
 import 'package:rentle/repositories/tenant_repository.dart';
@@ -19,7 +20,6 @@ class TenantPaymentsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final payments = ref.watch(tenantPaymentsProvider);
-    final now = DateTime.now();
 
     return Scaffold(
       appBar: const RentleAppBar(title: 'Payments', showBack: false),
@@ -58,38 +58,78 @@ class TenantPaymentsScreen extends ConsumerWidget {
             ],
           ),
           data: (list) {
-            final current = list.where(
-              (r) => r.month == now.month && r.year == now.year,
-            ).toList();
+            final unpaid = list.where((r) => r.status != 'paid').toList();
             return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
               children: [
-                if (current.isNotEmpty)
-                  PressableCard(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    child: Row(
-                      children: [
-                        Text(
-                          'This Month',
-                          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-                        ),
-                        const Spacer(),
-                        Text(
-                          current.first.status,
-                          style: GoogleFonts.inter(
-                            color: current.first.status == 'paid'
-                                ? RentleColors.teal
-                                : RentleColors.coral,
-                            fontWeight: FontWeight.w600,
+                if (unpaid.isNotEmpty) ...[
+                  Text(
+                    'Pay Now',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  ...unpaid.map(
+                    (record) => PressableCard(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      record.displayTitle,
+                                      style: GoogleFonts.inter(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    if (record.dueDate != null)
+                                      Text(
+                                        'Due ${DateFormat.yMMMd().format(record.dueDate!)}',
+                                        style: GoogleFonts.inter(fontSize: 12),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                '₹${record.amount.toInt()}',
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.bold,
+                                  color: RentleColors.coral,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 12),
+                          RentleButton(
+                            label: 'Pay via UPI',
+                            color: RentleColors.trustBlue,
+                            onPressed: () => handleTenantUpiPayment(
+                              context,
+                              ref,
+                              record,
+                              onSuccess: () =>
+                                  ref.invalidate(tenantPaymentsProvider),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
+                  const SizedBox(height: 16),
+                ],
+                Text(
+                  'History',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
                 if (list.isEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(top: 80),
+                    padding: const EdgeInsets.only(top: 40),
                     child: Center(
                       child: Text(
                         'No payment history yet',
@@ -109,8 +149,10 @@ class TenantPaymentsScreen extends ConsumerWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '${DateFormat.MMMM().format(DateTime(record.year, record.month))} ${record.year}',
-                                  style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                                  record.displayTitle,
+                                  style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                                 if (record.paidAt != null)
                                   Text(

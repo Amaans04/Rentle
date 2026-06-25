@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:rentle/core/constants/colors.dart';
 import 'package:rentle/core/utils/api_errors.dart';
-import 'package:rentle/core/utils/payment_utils.dart';
+import 'package:rentle/core/utils/tenant_payment_flow.dart';
 import 'package:rentle/core/widgets/rentle_widgets.dart';
 import 'package:rentle/repositories/tenant_repository.dart';
 
@@ -133,12 +133,73 @@ class TenantHomeScreen extends ConsumerWidget {
                       const SizedBox(height: 16),
                       RentleButton(
                         label: 'Pay Now',
-                        onPressed: () => _handlePayNow(context, ref, data),
+                        onPressed: () => handleTenantUpiPayment(
+                          context,
+                          ref,
+                          rent,
+                          onSuccess: () => ref.invalidate(tenantHomeProvider),
+                        ),
                       ),
                     ],
                   ],
                 ),
               ),
+              if (data.pendingCharges.length > 1 ||
+                  (data.pendingCharges.length == 1 &&
+                      data.pendingCharges.first.recordId !=
+                          rent?.recordId)) ...[
+                const SizedBox(height: 16),
+                Text(
+                  'Pending Charges',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                ...data.pendingCharges.where((c) {
+                  if (rent == null) return true;
+                  return c.recordId != rent.recordId;
+                }).map(
+                  (charge) => PressableCard(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                charge.displayTitle,
+                                style: GoogleFonts.inter(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (charge.chargeType != null)
+                                Text(
+                                  charge.chargeType!,
+                                  style: GoogleFonts.inter(fontSize: 12),
+                                ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '₹${charge.amount.toInt()}',
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.payment_rounded),
+                          color: RentleColors.trustBlue,
+                          onPressed: () => handleTenantUpiPayment(
+                            context,
+                            ref,
+                            charge,
+                            onSuccess: () => ref.invalidate(tenantHomeProvider),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               if (data.room != null)
                 PressableCard(
@@ -225,67 +286,6 @@ class TenantHomeScreen extends ConsumerWidget {
         ],
       ),
     );
-  }
-
-  Future<void> _handlePayNow(
-    BuildContext context,
-    WidgetRef ref,
-    TenantHomeData data,
-  ) async {
-    final rent = data.currentRent;
-    final upiId = data.pg?.upiId;
-    if (rent == null || upiId == null || upiId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('UPI payment not configured')),
-      );
-      return;
-    }
-
-    final link = PaymentUtils.generateUpiLink(
-      upiId: upiId,
-      name: data.pg!.name,
-      amount: rent.amount.toStringAsFixed(2),
-      note: 'Rent for ${DateFormat.MMMM().format(DateTime(rent.year, rent.month))} ${rent.year}',
-      transactionRef: rent.recordId,
-    );
-    await PaymentUtils.launchPayment(link);
-
-    if (!context.mounted) return;
-    final paid = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Payment'),
-        content: const Text('Did your payment go through?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes')),
-        ],
-      ),
-    );
-
-    if (paid == true) {
-      try {
-        await ref.read(tenantRepositoryProvider).markPaid(
-              recordId: rent.recordId,
-              method: 'upi',
-            );
-        ref.invalidate(tenantHomeProvider);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: RentleColors.teal,
-              content: Text('Payment marked as paid'),
-            ),
-          );
-        }
-      } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(friendlyApiError(e))),
-          );
-        }
-      }
-    }
   }
 
   void _showComplaintSheet(
