@@ -3,7 +3,9 @@
 .env.local
 .env.*.local
 server/.env
+server/.env.example
 mobile/.env
+mobile/.env.example
 
 # Dependencies
 node_modules/
