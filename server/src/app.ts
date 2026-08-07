@@ -13,6 +13,8 @@ import { tenancyRoutes } from "./routes/tenancies.js";
 import { tenantSelfRoutes } from "./routes/tenant.js";
 import { invoiceRoutes } from "./routes/invoices.js";
 import { paymentRoutes } from "./routes/payments.js";
+import { complaintRoutes } from "./routes/complaints.js";
+import { noticeRoutes } from "./routes/notices.js";
 import { fail } from "./lib/api-response.js";
 import { HttpError } from "./lib/http-errors.js";
 
@@ -60,9 +62,8 @@ export function buildApp(): FastifyInstance {
   app.register(tenantSelfRoutes);
   app.register(invoiceRoutes);
   app.register(paymentRoutes);
-
-  // Phase 4+ resource routes (complaints, notices) register here as
-  // they're built.
+  app.register(complaintRoutes);
+  app.register(noticeRoutes);
 
   return app;
 }

@@ -1,13 +1,23 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { BedStatus, TenancyStatus, type Prisma } from "@prisma/client";
+import { BedStatus, ComplaintPriority, TenancyStatus, type Prisma } from "@prisma/client";
 import { ok } from "../lib/api-response.js";
-import { HttpError } from "../lib/http-errors.js";
+import { HttpError, NotFoundError } from "../lib/http-errors.js";
 import { orgIdParamSchema, parseOrThrow } from "../lib/validation.js";
 import { authenticate, resolveTenantContext, withRequestTenantContext } from "../auth/pipeline.js";
 import { withOrgContext } from "../auth/db-context.js";
 import { withAudit } from "../lib/with-audit.js";
 import { verifyOnboardingToken } from "../lib/onboarding-token.js";
+import { visibleNoticeWhere } from "../services/notice-visibility.js";
+
+const createComplaintSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().min(1),
+  category: z.string().min(1),
+  priority: z.nativeEnum(ComplaintPriority).default(ComplaintPriority.MEDIUM),
+  photos: z.array(z.string()).default([]),
+});
+const commentSchema = z.object({ content: z.string().min(1) });
 
 const acceptSchema = z.object({
   token: z.string().min(1),
@@ -166,6 +176,120 @@ export async function tenantSelfRoutes(fastify: FastifyInstance): Promise<void> 
         tx.tenantDocument.findMany({ where: { tenancyId: tenancy.id }, orderBy: { createdAt: "desc" } })
       );
       return reply.status(200).send(ok(documents));
+    }
+  );
+
+  // --- Complaints ---
+
+  fastify.post(
+    "/organizations/:orgId/tenant/complaints",
+    { preHandler: [authenticate, resolveTenantContext] },
+    async (request, reply) => {
+      const body = parseOrThrow(createComplaintSchema, request.body);
+      const { organization, tenancy } = request.tenantContext!;
+
+      const complaint = await withRequestTenantContext(request, (tx) =>
+        withAudit(
+          tx,
+          { organizationId: organization.id, userId: request.authUser!.id, action: "CREATE", resource: "complaint" },
+          () =>
+            tx.complaint.create({
+              data: {
+                organizationId: organization.id,
+                propertyId: tenancy.propertyId,
+                reporterId: request.authUser!.id,
+                title: body.title,
+                description: body.description,
+                category: body.category,
+                priority: body.priority,
+                photos: body.photos,
+              },
+            })
+        )
+      );
+
+      return reply.status(201).send(ok(complaint));
+    }
+  );
+
+  fastify.get(
+    "/organizations/:orgId/tenant/complaints",
+    { preHandler: [authenticate, resolveTenantContext] },
+    async (request, reply) => {
+      const complaints = await withRequestTenantContext(request, (tx) =>
+        tx.complaint.findMany({ where: { reporterId: request.authUser!.id }, orderBy: { createdAt: "desc" } })
+      );
+      return reply.status(200).send(ok(complaints));
+    }
+  );
+
+  fastify.get(
+    "/organizations/:orgId/tenant/complaints/:complaintId",
+    { preHandler: [authenticate, resolveTenantContext] },
+    async (request, reply) => {
+      const { complaintId } = parseOrThrow(z.object({ complaintId: z.string().min(1) }), request.params);
+
+      // Ownership re-derivation — reporterId must match the caller, never
+      // trust the complaintId path param alone.
+      const complaint = await withRequestTenantContext(request, (tx) =>
+        tx.complaint.findFirst({
+          where: { id: complaintId, reporterId: request.authUser!.id },
+          include: { comments: { orderBy: { createdAt: "asc" } } },
+        })
+      );
+      if (!complaint) throw new NotFoundError("Complaint");
+
+      return reply.status(200).send(ok(complaint));
+    }
+  );
+
+  fastify.post(
+    "/organizations/:orgId/tenant/complaints/:complaintId/comments",
+    { preHandler: [authenticate, resolveTenantContext] },
+    async (request, reply) => {
+      const { complaintId } = parseOrThrow(z.object({ complaintId: z.string().min(1) }), request.params);
+      const body = parseOrThrow(commentSchema, request.body);
+      const { organization } = request.tenantContext!;
+
+      const comment = await withRequestTenantContext(request, async (tx) => {
+        const complaint = await tx.complaint.findFirst({ where: { id: complaintId, reporterId: request.authUser!.id } });
+        if (!complaint) throw new NotFoundError("Complaint");
+
+        return withAudit(
+          tx,
+          { organizationId: organization.id, userId: request.authUser!.id, action: "CREATE", resource: "complaint-comment" },
+          () => tx.complaintComment.create({ data: { complaintId, authorId: request.authUser!.id, content: body.content } })
+        );
+      });
+
+      return reply.status(201).send(ok(comment));
+    }
+  );
+
+  // --- Notices — filtered by audience targeting (ALL_TENANTS/PROPERTY always
+  // visible; FLOOR/ROOM only to tenants actually on that floor/in that room) ---
+
+  fastify.get(
+    "/organizations/:orgId/tenant/notices",
+    { preHandler: [authenticate, resolveTenantContext] },
+    async (request, reply) => {
+      const { organization, tenancy } = request.tenantContext!;
+
+      const notices = await withRequestTenantContext(request, async (tx) => {
+        const bed = await tx.bed.findUniqueOrThrow({ where: { id: tenancy.bedId }, include: { room: true } });
+        return tx.notice.findMany({
+          where: visibleNoticeWhere({
+            organizationId: organization.id,
+            propertyId: tenancy.propertyId,
+            floorId: bed.room.floorId,
+            roomId: bed.roomId,
+            now: new Date(),
+          }),
+          orderBy: { createdAt: "desc" },
+        });
+      });
+
+      return reply.status(200).send(ok(notices));
     }
   );
 }
