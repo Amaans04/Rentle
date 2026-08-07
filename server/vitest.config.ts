@@ -4,24 +4,24 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: false,
-    // DB-integration tests (isolation.test.ts, phase1-*.test.ts) make many
-    // real sequential round-trips to Supabase — generous timeouts because a
-    // remote CI runner's latency to the DB is meaningfully higher than a
-    // local network's, not because anything is actually slow/hanging.
-    testTimeout: 30000,
-    hookTimeout: 30000,
+    // DB-integration tests (isolation.test.ts, phase1-*.test.ts) chain many
+    // sequential requests, each involving several real round-trips
+    // (resolveOrg's membership lookup, the handler's own ownership
+    // re-check, the actual write). A remote CI runner's per-round-trip
+    // latency to Supabase runs ~2-3x a local network's, so a chain that's
+    // comfortably fast locally can approach a generous-looking timeout in
+    // CI — not a hang, just real cumulative network latency.
+    testTimeout: 60000,
+    hookTimeout: 60000,
     setupFiles: ["./tests/setup.ts"],
-    // Run all test files in one process instead of vitest's default
-    // parallel worker pool. Each PrismaClient opens its own connection
-    // pool against Supabase's free-tier pooler, which has a limited number
-    // of slots shared across the whole project — multiple test-file workers
-    // each opening their own pool can exhaust it and hang rather than error
-    // cleanly. One process + the shared `prisma` singleton (see
-    // tests/isolation.test.ts and tests/phase1-*.test.ts) keeps total
-    // connections bounded regardless of how many test files exist.
-    pool: "forks",
-    poolOptions: {
-      forks: { singleFork: true },
-    },
+    // Run test files sequentially instead of vitest's default parallel
+    // workers (this is the Vitest 4 top-level option — poolOptions.
+    // singleFork was removed and silently ignored, worth knowing if this
+    // needs revisiting). Each PrismaClient opens its own connection pool
+    // against Supabase's free-tier pooler, which has a limited number of
+    // slots shared across the whole project — fewer concurrent pools
+    // reduces pressure on it regardless of the per-client connection_limit
+    // set in lib/prisma.ts.
+    fileParallelism: false,
   },
 });
