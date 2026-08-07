@@ -30,12 +30,23 @@ export async function withOrgContext<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
   client: PrismaClient = prisma
 ): Promise<T> {
-  return client.$transaction(async (tx) => {
-    // set_config(..., true) is LOCAL-scoped (reverts at transaction end) and,
-    // unlike `SET LOCAL <var> = <value>`, accepts a bound parameter — no
-    // string interpolation into SQL, even though organizationId is already
-    // a verified internal id by the time this runs.
-    await tx.$executeRaw`SELECT set_config('app.current_org_id', ${organizationId}, true)`;
-    return fn(tx);
-  });
+  return client.$transaction(
+    async (tx) => {
+      // set_config(..., true) is LOCAL-scoped (reverts at transaction end) and,
+      // unlike `SET LOCAL <var> = <value>`, accepts a bound parameter — no
+      // string interpolation into SQL, even though organizationId is already
+      // a verified internal id by the time this runs.
+      await tx.$executeRaw`SELECT set_config('app.current_org_id', ${organizationId}, true)`;
+      return fn(tx);
+    },
+    // Prisma's default interactive-transaction timeout is 5s — comfortably
+    // exceeded by any handler doing more than a few sequential round-trips
+    // under real network latency (hit this for real in CI: a 9-step test
+    // setup failed with "Transaction not found"). generateInvoicesForProperty
+    // (services/invoicing.ts) loops per-tenancy inside one of these — a
+    // property with enough active tenants would hit the same ceiling in
+    // production, not just under test. 30s is generous for our pilot-scale
+    // traffic; revisit if a handler ever legitimately needs longer.
+    { timeout: 30000, maxWait: 10000 }
+  );
 }
