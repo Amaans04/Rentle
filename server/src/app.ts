@@ -23,6 +23,12 @@ export function buildApp(): FastifyInstance {
     reply.status(error.statusCode ?? 500).send(fail("INTERNAL_ERROR", "Something went wrong."));
   });
 
+  // Public, unauthenticated liveness check for Render's own health probing —
+  // deliberately separate from /internal/health, which requires a secret
+  // and does a real DB round-trip (used by the daily cron as a Supabase
+  // keep-alive, not suitable as an infra-level liveness probe).
+  app.get("/health", async (_request, reply) => reply.status(200).send({ status: "ok" }));
+
   app.register(clerkWebhookRoutes);
   app.register(internalHealthRoutes);
   app.register(meRoutes);
