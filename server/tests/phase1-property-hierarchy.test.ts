@@ -57,6 +57,17 @@ describe.skipIf(!hasLiveDb)("Phase 1: property hierarchy + staff/RBAC", () => {
     ({ buildApp } = await import("../src/app.js"));
     app = buildApp();
 
+    // Defensive sweep: if a previous run's afterAll never ran (e.g. a
+    // timeout aborted the file before cleanup), stale test_* rows older
+    // than an hour would otherwise accumulate silently forever. Scoped to
+    // the test_ prefix + age so it can never touch real data.
+    const anHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    await prisma.organizationMember.deleteMany({
+      where: { organization: { clerkOrgId: { startsWith: "test_org_" }, createdAt: { lt: anHourAgo } } },
+    });
+    await prisma.organization.deleteMany({ where: { clerkOrgId: { startsWith: "test_org_" }, createdAt: { lt: anHourAgo } } });
+    await prisma.user.deleteMany({ where: { clerkId: { startsWith: "test_" }, createdAt: { lt: anHourAgo } } });
+
     const suffix = Date.now();
     ownerAToken = `test_owner_a_${suffix}`;
     managerAToken = `test_manager_a_${suffix}`;
