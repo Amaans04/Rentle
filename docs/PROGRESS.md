@@ -32,8 +32,22 @@ Living doc. Updated at the end of every phase. Full plan: `~/.claude/plans/hey-h
 ### One thing to double check
 - Confirm `CLERK_WEBHOOK_SECRET` is also set in **Render's** Environment tab (it was added to `.env` and GitHub secrets, but Render was originally deployed before the webhook existed — make sure that value made it there too and the service redeployed after).
 
-### Next — Phase 1: Property hierarchy + staff/RBAC
-Org/Property/Building/Floor/Room/Bed CRUD + bed-status-machine endpoint, staff invite + role assignment, audit-logging wired into every mutation from here on. See plan §4 for the full exit criteria.
+## Phase 1 — Property hierarchy + staff/RBAC: COMPLETE
+
+**Goal:** Org/Property/Building/Floor/Room/Bed CRUD + bed-status-machine endpoint, staff invite + role assignment, audit-logging wired into every mutation. **All exit criteria met — see plan §4.**
+
+### Done
+- Shared route infra: `src/lib/http-errors.ts` (typed `HttpError`/`NotFoundError`/`ValidationError`/`ConflictError`, checked via `instanceof` in the global error handler), `src/lib/validation.ts` (`parseOrThrow` for zod schemas).
+- `src/routes/organizations.ts` — GET/PATCH org, member list/update/deactivate.
+- `src/routes/properties.ts` — full CRUD, with an explicit fix: `requirePermission`'s property-scope check only fires when `:propertyId` is in the URL, which POST (create) never has — so a property-scoped manager could otherwise create unrestricted new properties. Fixed with an explicit `member.propertyIds.length > 0` check in the handler.
+- `src/routes/buildings-floors.ts`, `src/routes/rooms-beds.ts` — CRUD, rooms/beds flattened by `propertyId` with optional filters per plan §3 (not deep URL nesting).
+- `src/services/bed-status.ts` + `PATCH /beds/:bedId/status` — the bed-status-machine endpoint. `OCCUPIED` is unreachable in either direction through this endpoint (only a Tenancy, Phase 2, can set it) — enforced in code now, tested, ready for Phase 2 to hook in.
+- `src/routes/staff.ts` — invite endpoint calls Clerk's `createOrganizationInvitation` (coarse `org:member` Clerk role only — granular business role/propertyIds recorded in the audit log now, applied via `PATCH /members/:memberId` once they've joined, not pre-set through Clerk metadata); `StaffProfile` upsert/get for salary/joinDate.
+- Every mutating route wraps its write in `withAudit` — verified by direct count, not just spot-checked (mutation-route count == `withAudit`-call count in every route file).
+- **New test file** `tests/phase1-property-hierarchy.test.ts` — 8 tests against the live database (only Clerk's token *verification* is mocked, trusting Clerk's own well-tested implementation; everything downstream — RLS, authorization, business logic — runs for real). Covers: full property→building→floor→room→bed creation via API calls only; a property-scoped manager blocked from creating new properties, reading/writing outside their `propertyIds`, with the property list itself correctly filtered; the bed-status-machine rejecting manual `OCCUPIED` and requiring `blockedReason` for `BLOCKED`; every mutation producing an audit row. All 17 tests (9 from Phase 0 + 8 new) pass together; zero orphaned test data after cleanup.
+
+### Next — Phase 2: Tenancy lifecycle
+Tenancy CRUD + invite/onboarding-token flow, document upload via signed URLs, transfer/notice/move-out endpoints, `TenancyEvent` timeline, tenant self-auth via Clerk. This is also where `Bed.status` actually starts moving to/from `OCCUPIED`, hooking into the state machine built in Phase 1. See plan §4 for full exit criteria.
 
 ## Decisions log
 
@@ -41,3 +55,5 @@ Org/Property/Building/Floor/Room/Bed CRUD + bed-status-machine endpoint, staff i
 - 2026-08-07 — Phase 0 scaffold built locally (schema, auth pipeline, RLS SQL, tests, CI), pushed to GitHub.
 - 2026-08-07 — Supabase fully wired: `app_user` role, migration applied, RLS applied and proven against live data. `organizations`/`organization_members` scoped out of RLS deliberately (see gotcha #7 above) — this is a considered design decision, not a shortcut.
 - 2026-08-07 — Clerk project created (Organizations enabled, email OTP + Google sign-in, phone number deliberately left off Clerk's sign-in options since Clerk now forces paid SMS verification the moment phone is enabled — collected as a plain unverified profile field in our own app instead). `server/` deployed to Render (`https://rentle-gdys.onrender.com`), Clerk webhook configured, all GitHub Actions secrets set. **Phase 0 complete.**
+- 2026-08-08 — Timeline decision: the 3-PG free pilot ships on a **narrowed "Pilot v1" mobile scope** (core owner loop only, utilitarian UI, Android sideload, no app stores) rather than the full-scope Flutter app, to hit ~3–6 weeks pilot-ready instead of ~6–10+. Full mobile scope resumes post-pilot. See plan §4 Phase 5 for exact in/out-of-scope list.
+- 2026-08-08 — **Phase 1 complete.** Property hierarchy + staff/RBAC API built and tested end-to-end against live Supabase, including the bed-status-machine and full audit-log coverage.

@@ -3,7 +3,13 @@ import rateLimit from "@fastify/rate-limit";
 import { clerkWebhookRoutes } from "./routes/webhooks/clerk.js";
 import { internalHealthRoutes } from "./routes/internal/health.js";
 import { meRoutes } from "./routes/me.js";
+import { organizationRoutes } from "./routes/organizations.js";
+import { propertyRoutes } from "./routes/properties.js";
+import { buildingFloorRoutes } from "./routes/buildings-floors.js";
+import { roomBedRoutes } from "./routes/rooms-beds.js";
+import { staffRoutes } from "./routes/staff.js";
 import { fail } from "./lib/api-response.js";
+import { HttpError } from "./lib/http-errors.js";
 
 /**
  * Split from index.ts so tests can build the app without binding a port.
@@ -18,9 +24,16 @@ export function buildApp(): FastifyInstance {
     timeWindow: "1 minute",
   });
 
-  app.setErrorHandler((error: FastifyError, _request, reply) => {
+  app.setErrorHandler((error: FastifyError | HttpError, _request, reply) => {
+    if (error instanceof HttpError) {
+      return reply.status(error.statusCode).send(fail(error.code, error.message, error.details));
+    }
+    // Fastify's own validation/parsing errors (e.g. malformed JSON body) carry a statusCode too.
+    if (typeof error.statusCode === "number" && error.statusCode < 500) {
+      return reply.status(error.statusCode).send(fail("BAD_REQUEST", error.message));
+    }
     app.log.error(error);
-    reply.status(error.statusCode ?? 500).send(fail("INTERNAL_ERROR", "Something went wrong."));
+    reply.status(500).send(fail("INTERNAL_ERROR", "Something went wrong."));
   });
 
   // Public, unauthenticated liveness check for Render's own health probing —
@@ -32,10 +45,14 @@ export function buildApp(): FastifyInstance {
   app.register(clerkWebhookRoutes);
   app.register(internalHealthRoutes);
   app.register(meRoutes);
+  app.register(organizationRoutes);
+  app.register(propertyRoutes);
+  app.register(buildingFloorRoutes);
+  app.register(roomBedRoutes);
+  app.register(staffRoutes);
 
-  // Phase 1+ resource routes (organizations, properties, rooms, beds,
-  // tenancies, invoices, payments, complaints, notices, staff) register
-  // here as they're built.
+  // Phase 2+ resource routes (tenancies, invoices, payments, complaints,
+  // notices) register here as they're built.
 
   return app;
 }
