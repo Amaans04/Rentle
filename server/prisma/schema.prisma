@@ -1,0 +1,628 @@
+// Rentle — Core Property Ops schema
+// Database: PostgreSQL 15+ (Supabase)
+// Scope: see /docs/PROGRESS.md and the approved plan. 21 models, deliberately trimmed
+// from the enterprise reference schema — CRM, booking, accounting/ledger, visitor/food/
+// attendance, platform-admin, and notifications infra are NOT modeled here (deferred).
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pgcrypto, citext]
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum OrgMemberRole {
+  OWNER
+  MANAGER
+  RECEPTIONIST
+  ACCOUNTANT
+  STAFF
+}
+
+enum SubscriptionTier {
+  STARTER
+  GROWTH
+  BUSINESS
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum PropertyType {
+  PG
+  HOSTEL
+  CO_LIVING
+  APARTMENT
+}
+
+enum BedStatus {
+  VACANT
+  OCCUPIED
+  RESERVED
+  BLOCKED
+  MAINTENANCE
+  CLEANING
+}
+
+enum TenancyStatus {
+  PENDING_ONBOARDING
+  ACTIVE
+  NOTICE_GIVEN
+  MOVING_OUT
+  ARCHIVED
+  BLACKLISTED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  VOID
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+// RAZORPAY/CASHFREE kept unused for now — gateway integration is deferred,
+// but the enum values exist so wiring a gateway later needs no migration.
+enum PaymentMethod {
+  RAZORPAY
+  CASHFREE
+  UPI
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  WALLET
+}
+
+enum ComplaintPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  ESCALATED
+  RESOLVED
+  CLOSED
+  REOPENED
+}
+
+enum NoticeAudience {
+  ALL_TENANTS
+  PROPERTY
+  FLOOR
+  ROOM
+  CUSTOM
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  EXPORT
+  PAYMENT
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTH & ORGANIZATION
+// Local User/Organization/OrganizationMember rows are provisioned ONLY via a
+// signature-verified Clerk webhook — never invented ad hoc inside a request
+// handler from a client-supplied field. See src/routes/webhooks/clerk.ts.
+// ═══════════════════════════════════════════════════════════════════════════
+
+model User {
+  id          String    @id @default(cuid())
+  clerkId     String    @unique
+  email       String?   @unique @db.Citext
+  phone       String?   @unique
+  name        String?
+  avatarUrl   String?
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  memberships        OrganizationMember[]
+  tenancies          Tenancy[]
+  complaints         Complaint[]         @relation("ComplaintReporter")
+  assignedComplaints Complaint[]         @relation("ComplaintAssignee")
+  auditLogs          AuditLog[]
+
+  @@index([phone])
+  @@map("users")
+}
+
+model Organization {
+  id               String             @id @default(cuid())
+  clerkOrgId       String             @unique
+  name             String
+  slug             String             @unique
+  logoUrl          String?
+  primaryColor     String?            @default("#2563EB")
+  timezone         String             @default("Asia/Kolkata")
+  currency         String             @default("INR")
+  gstin            String?
+  subscriptionTier SubscriptionTier   @default(STARTER)
+  settings         Json               @default("{}")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  deletedAt        DateTime?
+  version          Int                @default(1)
+
+  members      OrganizationMember[]
+  properties   Property[]
+  subscription Subscription?
+  featureFlags OrgFeatureFlag[]
+  auditLogs    AuditLog[]
+
+  @@index([slug])
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String        @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrgMemberRole
+  propertyIds    String[]      @default([]) // empty = all properties (owner)
+  isActive       Boolean       @default(true)
+  joinedAt       DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+  staffProfile StaffProfile?
+
+  @@unique([organizationId, userId])
+  @@index([organizationId, role])
+  @@map("organization_members")
+}
+
+// Thin, manually-set subscription record — no live billing/checkout yet.
+// See docs on §2a: swappable for a real Razorpay/Cashfree-driven subscription
+// later without a schema change (tier/status columns stay the same shape).
+model Subscription {
+  id               String             @id @default(cuid())
+  organizationId   String             @unique
+  tier             SubscriptionTier   @default(STARTER)
+  status           SubscriptionStatus @default(ACTIVE)
+  currentPeriodEnd DateTime?
+  notes            String? // e.g. "pilot org — manually comped"
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("subscriptions")
+}
+
+// Per-org override, consulted before the SubscriptionTier→feature matrix.
+// Also the mechanism for marking pilot orgs as fully unlocked for free.
+model OrgFeatureFlag {
+  id             String   @id @default(cuid())
+  organizationId String
+  flagKey        String
+  enabled        Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, flagKey])
+  @@map("org_feature_flags")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PROPERTY HIERARCHY
+// organizationId is denormalized onto every level (including Building/Floor,
+// unlike the original reference schema) so every isolation check can filter
+// directly on organizationId instead of a join chain.
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Property {
+  id              String       @id @default(cuid())
+  organizationId  String
+  name            String
+  slug            String
+  type            PropertyType @default(PG)
+  address         Json // { line1, city, state, pincode, lat, lng }
+  phone           String?
+  email           String?
+  amenities       String[]     @default([])
+  photos          String[]     @default([])
+  rentDueDay      Int          @default(5) // 1-28
+  gracePeriodDays Int          @default(3)
+  lateFinePercent Decimal?     @db.Decimal(5, 2)
+  settings        Json         @default("{}")
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  deletedAt       DateTime?
+  version         Int          @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  buildings    Building[]
+  tenancies    Tenancy[]
+  complaints   Complaint[]
+  notices      Notice[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, deletedAt])
+  @@map("properties")
+}
+
+model Building {
+  id             String    @id @default(cuid())
+  organizationId String
+  propertyId     String
+  name           String
+  sortOrder      Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  property Property @relation(fields: [propertyId], references: [id])
+  floors   Floor[]
+
+  @@index([organizationId, propertyId])
+  @@map("buildings")
+}
+
+model Floor {
+  id             String    @id @default(cuid())
+  organizationId String
+  buildingId     String
+  name           String // "Ground", "1", "2"
+  level          Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  building Building @relation(fields: [buildingId], references: [id])
+  rooms    Room[]
+
+  @@index([organizationId, buildingId])
+  @@map("floors")
+}
+
+model Room {
+  id              String    @id @default(cuid())
+  organizationId  String
+  propertyId      String
+  floorId         String
+  roomNumber      String
+  roomType        String    @default("single") // single, double, triple, dormitory
+  sharingCapacity Int       @default(1)
+  rentAmount      Decimal   @db.Decimal(12, 2)
+  mrpAmount       Decimal   @db.Decimal(12, 2)
+  amenities       String[]  @default([])
+  photos          String[]  @default([])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+  version         Int       @default(1)
+
+  floor Floor @relation(fields: [floorId], references: [id])
+  beds  Bed[]
+
+  @@unique([propertyId, roomNumber])
+  @@index([organizationId, propertyId])
+  @@map("rooms")
+}
+
+model Bed {
+  id             String    @id @default(cuid())
+  organizationId String
+  propertyId     String
+  roomId         String
+  bedLabel       String // "A", "B", "1"
+  status         BedStatus @default(VACANT)
+  rentAmount     Decimal?  @db.Decimal(12, 2) // override room rent
+  reservedUntil  DateTime?
+  blockedReason  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+  version        Int       @default(1)
+
+  room      Room      @relation(fields: [roomId], references: [id])
+  tenancies Tenancy[]
+
+  @@unique([roomId, bedLabel])
+  @@index([organizationId, propertyId, status])
+  @@map("beds")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TENANT LIFECYCLE
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Tenancy {
+  id                  String        @id @default(cuid())
+  organizationId      String
+  propertyId          String
+  bedId               String
+  userId              String
+  status              TenancyStatus @default(PENDING_ONBOARDING)
+  rentAmount          Decimal       @db.Decimal(12, 2)
+  depositAmount       Decimal       @default(0) @db.Decimal(12, 2)
+  moveInDate          DateTime?
+  noticeDate          DateTime?
+  moveOutDate         DateTime?
+  emergencyContact    Json?
+  parentDetails       Json?
+  onboardingToken     String?       @unique
+  onboardingExpiresAt DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  deletedAt           DateTime?
+  version             Int           @default(1)
+
+  property  Property         @relation(fields: [propertyId], references: [id])
+  bed       Bed              @relation(fields: [bedId], references: [id])
+  user      User             @relation(fields: [userId], references: [id])
+  events    TenancyEvent[]
+  documents TenantDocument[]
+  invoices  Invoice[]
+
+  @@index([organizationId, propertyId, status])
+  @@index([bedId, status])
+  @@index([userId])
+  @@map("tenancies")
+}
+
+// Immutable timeline — onboarded, transferred, notice_given, moved_out, etc.
+model TenancyEvent {
+  id        String   @id @default(cuid())
+  tenancyId String
+  type      String
+  metadata  Json?
+  actorId   String?
+  createdAt DateTime @default(now())
+
+  tenancy Tenancy @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+
+  @@index([tenancyId, createdAt])
+  @@map("tenancy_events")
+}
+
+// Agreements folded in here (type="AGREEMENT" + signature columns) rather
+// than a separate Agreement model — one fewer table, same capability.
+model TenantDocument {
+  id             String    @id @default(cuid())
+  tenancyId      String
+  type           String // aadhaar, pan, passport, police_verification, agreement
+  storageKey     String
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  verifiedAt     DateTime?
+  verifiedBy     String?
+  signedAt       DateTime?
+  signedByTenant Boolean   @default(false)
+  signedByOwner  Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+
+  tenancy Tenancy @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+
+  @@index([tenancyId, type])
+  @@map("tenant_documents")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INVOICING & PAYMENTS — payment gateway integration deferred; manual entry
+// only for now. Schema stays ledger-ready / gateway-ready without needing a
+// future migration (externalId, metadata, gateway PaymentMethod values).
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Invoice {
+  id             String        @id @default(cuid())
+  organizationId String
+  propertyId     String
+  tenancyId      String
+  invoiceNumber  String
+  periodStart    DateTime
+  periodEnd      DateTime
+  dueDate        DateTime
+  subtotal       Decimal       @db.Decimal(12, 2)
+  taxAmount      Decimal       @default(0) @db.Decimal(12, 2)
+  totalAmount    Decimal       @db.Decimal(12, 2)
+  paidAmount     Decimal       @default(0) @db.Decimal(12, 2)
+  status         InvoiceStatus @default(DRAFT)
+  pdfStorageKey  String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  version        Int           @default(1)
+
+  tenancy     Tenancy             @relation(fields: [tenancyId], references: [id])
+  lineItems   InvoiceLineItem[]
+  allocations PaymentAllocation[]
+
+  @@unique([organizationId, invoiceNumber])
+  @@index([organizationId, dueDate, status])
+  @@index([tenancyId])
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  description String
+  category    String // rent, electricity, food, laundry, late_fine, deposit
+  quantity    Decimal  @default(1) @db.Decimal(10, 2)
+  unitPrice   Decimal  @db.Decimal(12, 2)
+  amount      Decimal  @db.Decimal(12, 2)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_line_items")
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  organizationId String
+  propertyId     String?
+  tenancyId      String?
+  amount         Decimal       @db.Decimal(12, 2)
+  method         PaymentMethod
+  status         PaymentStatus @default(PENDING)
+  externalId     String?       @unique // future gateway payment_id (idempotency)
+  utr            String?
+  metadata       Json?
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  version        Int           @default(1)
+
+  allocations PaymentAllocation[]
+
+  @@index([organizationId, paidAt])
+  @@index([tenancyId])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id        String  @id @default(cuid())
+  paymentId String
+  invoiceId String
+  amount    Decimal @db.Decimal(12, 2)
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@unique([paymentId, invoiceId])
+  @@map("payment_allocations")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// OPERATIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Complaint {
+  id             String            @id @default(cuid())
+  organizationId String
+  propertyId     String
+  reporterId     String
+  assigneeId     String?
+  title          String
+  description    String
+  category       String
+  priority       ComplaintPriority @default(MEDIUM)
+  status         ComplaintStatus   @default(OPEN)
+  photos         String[]          @default([])
+  resolvedAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  version        Int               @default(1)
+
+  property Property           @relation(fields: [propertyId], references: [id])
+  reporter User               @relation("ComplaintReporter", fields: [reporterId], references: [id])
+  assignee User?              @relation("ComplaintAssignee", fields: [assigneeId], references: [id])
+  comments ComplaintComment[]
+
+  @@index([organizationId, propertyId, status])
+  @@map("complaints")
+}
+
+model ComplaintComment {
+  id          String   @id @default(cuid())
+  complaintId String
+  authorId    String
+  content     String
+  createdAt   DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId])
+  @@map("complaint_comments")
+}
+
+model Notice {
+  id             String         @id @default(cuid())
+  organizationId String
+  propertyId     String
+  title          String
+  body           String // rich text HTML
+  audience       NoticeAudience @default(ALL_TENANTS)
+  audienceFilter Json? // reserved for future notification fan-out
+  attachments    String[]       @default([])
+  publishAt      DateTime?
+  expiresAt      DateTime?
+  publishedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@index([organizationId, propertyId, publishAt])
+  @@map("notices")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STAFF
+// ═══════════════════════════════════════════════════════════════════════════
+
+model StaffProfile {
+  id       String    @id @default(cuid())
+  memberId String    @unique
+  salary   Decimal?  @db.Decimal(12, 2)
+  joinDate DateTime?
+  metadata Json?
+
+  member OrganizationMember @relation(fields: [memberId], references: [id])
+
+  @@map("staff_profiles")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUDIT — every mutating module wraps its write + this create in the same
+// $transaction (see src/lib/with-audit.ts) so it can't be silently skipped.
+// ═══════════════════════════════════════════════════════════════════════════
+
+model AuditLog {
+  id             String      @id @default(cuid())
+  organizationId String?
+  userId         String?
+  action         AuditAction
+  resource       String // e.g. "tenancy:abc123"
+  metadata       Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime    @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  user         User?         @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}

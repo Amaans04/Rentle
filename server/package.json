@@ -1,0 +1,37 @@
+{
+  "name": "@rentle/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests --ext .ts",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@clerk/backend": "^1.21.2",
+    "@fastify/rate-limit": "^10.2.1",
+    "@fastify/swagger": "^9.4.0",
+    "@prisma/client": "^6.1.0",
+    "@supabase/supabase-js": "^2.47.10",
+    "fastify": "^5.2.0",
+    "pino": "^9.6.0",
+    "svix": "^1.42.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "eslint": "^9.17.0",
+    "prisma": "^6.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^4.0.0"
+  }
+}

@@ -1,0 +1,36 @@
+name: Daily jobs
+
+# Two problems solved for $0 (see plan §0):
+#   1. Keeps the Supabase project from auto-pausing after 7 days idle, by
+#      making a real DB query via /internal/health.
+#   2. Will trigger monthly invoice generation once Phase 3 builds
+#      POST /internal/invoices/generate — placeholder step below, inert
+#      until that route exists.
+on:
+  schedule:
+    - cron: "0 3 * * *" # 03:00 UTC daily (~08:30 IST)
+  workflow_dispatch: {} # allows a manual run from the Actions tab for testing
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Keep Supabase alive + server health check
+        run: |
+          # --max-time 90: Render's free tier sleeps after 15 min idle and
+          # takes 30-60s to cold-start on the next request (see plan §0).
+          curl -sf -X GET "${SERVER_URL}/internal/health" \
+            -H "x-internal-secret: ${INTERNAL_CRON_SECRET}" \
+            --max-time 90
+        env:
+          SERVER_URL: ${{ secrets.SERVER_URL }}
+          INTERNAL_CRON_SECRET: ${{ secrets.INTERNAL_CRON_SECRET }}
+
+      # - name: Generate monthly invoices (wired in Phase 3)
+      #   run: |
+      #     curl -sf -X POST "${SERVER_URL}/internal/invoices/generate" \
+      #       -H "x-internal-secret: ${INTERNAL_CRON_SECRET}" \
+      #       --max-time 60
+      #   env:
+      #     SERVER_URL: ${{ secrets.SERVER_URL }}
+      #     INTERNAL_CRON_SECRET: ${{ secrets.INTERNAL_CRON_SECRET }}
