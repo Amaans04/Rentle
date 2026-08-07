@@ -39,9 +39,15 @@ export async function clerkWebhookRoutes(fastify: FastifyInstance): Promise<void
       return reply.status(400).send(fail("INVALID_WEBHOOK", "Missing svix headers."));
     }
 
-    const wh = new Webhook(env.CLERK_WEBHOOK_SECRET);
+    if (!env.CLERK_WEBHOOK_SECRET) {
+      return reply
+        .status(503)
+        .send(fail("WEBHOOK_NOT_CONFIGURED", "CLERK_WEBHOOK_SECRET is not set yet."));
+    }
+
     let event: ClerkWebhookEvent;
     try {
+      const wh = new Webhook(env.CLERK_WEBHOOK_SECRET);
       event = wh.verify(request.body as string, {
         "svix-id": svixId,
         "svix-timestamp": svixTimestamp,

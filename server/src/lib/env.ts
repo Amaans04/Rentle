@@ -7,7 +7,11 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   CLERK_SECRET_KEY: z.string().min(1),
   CLERK_PUBLISHABLE_KEY: z.string().min(1),
-  CLERK_WEBHOOK_SECRET: z.string().min(1),
+  // Optional: doesn't exist until the Clerk webhook endpoint is created,
+  // which itself needs this server's live URL first (chicken-and-egg). The
+  // server should still boot without it — only POST /webhooks/clerk fails
+  // (returning a clear error) until this is set, not the whole process.
+  CLERK_WEBHOOK_SECRET: z.string().optional().default(""),
   INTERNAL_CRON_SECRET: z.string().min(1),
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
