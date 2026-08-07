@@ -39,18 +39,26 @@ describe.skipIf(!hasLiveDb)("cross-org isolation (RLS)", () => {
     orgAId = orgA.id;
     orgBId = orgB.id;
 
-    await prisma.property.create({
-      data: {
-        organizationId: orgBId,
-        name: "Org B's Property",
-        slug: "org-b-property",
-        address: { line1: "test", city: "test", state: "test", pincode: "000000" },
-      },
-    });
+    // properties IS RLS-protected (unlike organizations — see the note atop
+    // rls.sql), so seeding it must go through the same scoped-context path
+    // real app code uses, not a plain prisma call.
+    await withOrgContext(
+      orgBId,
+      (tx) =>
+        tx.property.create({
+          data: {
+            organizationId: orgBId,
+            name: "Org B's Property",
+            slug: "org-b-property",
+            address: { line1: "test", city: "test", state: "test", pincode: "000000" },
+          },
+        }),
+      prisma
+    );
   });
 
   afterAll(async () => {
-    await prisma.property.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await withOrgContext(orgBId, (tx) => tx.property.deleteMany({ where: { organizationId: orgBId } }), prisma);
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
     await prisma.$disconnect();
   });
@@ -63,7 +71,7 @@ describe.skipIf(!hasLiveDb)("cross-org isolation (RLS)", () => {
   it("org A's session context cannot SELECT org B's properties via a raw query (bypass attempt)", async () => {
     const rows = await withOrgContext(
       orgAId,
-      (tx) => tx.$queryRaw`SELECT * FROM properties WHERE organization_id = ${orgBId}`,
+      (tx) => tx.$queryRaw`SELECT * FROM properties WHERE "organizationId" = ${orgBId}`,
       prisma
     );
     expect(rows).toHaveLength(0);

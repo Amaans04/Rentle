@@ -13,7 +13,11 @@ datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
   directUrl  = env("DIRECT_URL")
-  extensions = [pgcrypto, citext]
+  // Supabase installs extensions into the `extensions` schema, not `public` —
+  // schema-qualifying here makes Prisma emit properly-qualified type
+  // references, since Prisma's connector pins search_path to `public` on
+  // every connection regardless of the role's own default search_path.
+  extensions = [pgcrypto(schema: "extensions"), citext(schema: "extensions")]
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

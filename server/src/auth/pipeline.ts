@@ -106,9 +106,15 @@ export function requireFeature(feature: FeatureKey) {
 
     const { organization } = request.orgContext;
 
-    const override = await prisma.orgFeatureFlag.findUnique({
-      where: { organizationId_flagKey: { organizationId: organization.id, flagKey: feature } },
-    });
+    // org_feature_flags is RLS-protected (unlike organizations/organization_members
+    // — see the note in db-context.ts), so this lookup must run inside the
+    // scoped transaction or it silently returns nothing regardless of the
+    // WHERE clause below.
+    const override = await withOrgContext(organization.id, (tx) =>
+      tx.orgFeatureFlag.findUnique({
+        where: { organizationId_flagKey: { organizationId: organization.id, flagKey: feature } },
+      })
+    );
     if (override) {
       if (!override.enabled) {
         return reply.status(403).send(Errors.featureLocked(feature));
