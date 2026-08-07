@@ -630,3 +630,21 @@ model AuditLog {
   @@index([userId, createdAt])
   @@map("audit_logs")
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// IDEMPOTENCY — plain Postgres table backs the Idempotency-Key header on
+// mutation-heavy endpoints (payment recording, invoice generation) per plan
+// §3. No Redis needed at this scale.
+// ═══════════════════════════════════════════════════════════════════════════
+
+model IdempotencyKey {
+  id             String   @id @default(cuid())
+  organizationId String
+  key            String
+  responseStatus Int
+  responseBody   Json
+  createdAt      DateTime @default(now())
+
+  @@unique([organizationId, key])
+  @@map("idempotency_keys")
+}

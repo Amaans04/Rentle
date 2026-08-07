@@ -60,8 +60,21 @@ Living doc. Updated at the end of every phase. Full plan: `~/.claude/plans/hey-h
 - Extracted a shared `tests/sweep-stale-test-data.ts` (FK-safe deletion order) used by both Phase 1 and Phase 2 test files, replacing each file's own partial inline version.
 - **New test file** `tests/phase2-tenancy-lifecycle.test.ts` — 15 tests against live Supabase. Full invite → accept → activate → transfer → notice → move-out cycle via real API calls, `Bed.status` checked at every step, invalid transitions rejected by the status machine, cross-org tenant isolation, and document upload+confirm. All 32 tests (17 from Phases 0–1 + 15 new) pass together; zero orphaned test data after cleanup.
 
-### Next — Phase 3: Invoicing + manual payments
-Invoice/line-item generation (manual trigger, then wired to the daily GitHub Actions cron), manual payment recording, `PaymentGatewayProvider` interface with only a manual binding (no live gateway — still deferred). See plan §4 for full exit criteria.
+## Phase 3 — Invoicing + manual payments: COMPLETE
+
+**Goal:** Invoice/line-item generation (manual trigger, then wired to the daily GitHub Actions cron), manual payment recording, `PaymentGatewayProvider` interface with only a manual binding. **All exit criteria met — see plan §4.**
+
+### Done
+- New `idempotency_keys` table (migrated + RLS-protected, same pattern as every other org-scoped table) backs the `Idempotency-Key` header — no Redis needed at this scale. `src/lib/idempotency.ts` wraps just the business-logic part of a handler, same calling convention as `withAudit`/`withRequestOrgContext`. Known, accepted limitation at pilot scale: it's a check-then-act pattern, not a lock, so two genuinely concurrent requests with the same key could both slip through — fine for a handful of pilot users, would need real locking before it matters at scale.
+- `src/services/invoicing.ts` — due-date math (`rentDueDay` clamped to the actual last day of the month), grace-period math (`OVERDUE` vs `SENT` decided at generation time), and `generateInvoicesForProperty`, shared by both the manual per-property trigger and the daily cron so there's exactly one generation code path, not two to keep in sync.
+- Generation is **idempotent at the domain level**, independent of the `Idempotency-Key` header: one invoice per `(tenancy, period)`, so running it twice (or once a day, forever, via cron) for a period that's already invoiced is a safe no-op — this is what makes the daily cron safe to fire regardless of each property's own `rentDueDay`.
+- `src/routes/payments.ts` — manual entry only (`CASH`/`UPI`/`BANK_TRANSFER`/`CHEQUE`/`WALLET`; `RAZORPAY`/`CASHFREE` rejected by validation, schema-ready for later). Updates `Invoice.paidAmount`/`status` (`PARTIALLY_PAID`/`PAID`) correctly, rejects payments exceeding the remaining balance, and calls the existing `PaymentGatewayProvider` interface (manual binding) rather than writing gateway-shaped code directly into the route.
+- `src/routes/internal/invoices.ts` — the cron endpoint. `organizations` has no RLS (per the Phase 0 decision), which is exactly the correct, intended use of that exception here: a trusted machine-to-machine job legitimately iterating every org, not a per-request handler trusting client input.
+- `.github/workflows/daily-jobs.yml` — the invoice-generation step (previously commented out, inert) is now live.
+- **New test file** `tests/phase3-invoicing-payments.test.ts` — 10 tests against live Supabase. Due-date/period math verified against the same pure functions the service uses (not hand-recomputed in the test, so a bug in the math would have to be wrong the same way twice to slip through), grace-period branch exercised with a genuinely past period, partial→full payment status transitions, overpayment and live-gateway-method rejection, an `Idempotency-Key` proven to prevent a real duplicate `Payment` row (not just a duplicate response), and the cron endpoint's auth + cross-org generation. All 42 tests (32 from Phases 0–2 + 10 new) pass together; zero orphaned test data after cleanup.
+
+### Next — Phase 4: Complaints & notices
+Complaint/comment CRUD + assignment/status transitions; Notice CRUD + audience targeting (in-app only). This is the last backend phase before the "server done and safe" gate and the start of Phase 5 (Pilot v1 mobile app). See plan §4 for full exit criteria.
 
 ## Decisions log
 
@@ -72,3 +85,4 @@ Invoice/line-item generation (manual trigger, then wired to the daily GitHub Act
 - 2026-08-08 — Timeline decision: the 3-PG free pilot ships on a **narrowed "Pilot v1" mobile scope** (core owner loop only, utilitarian UI, Android sideload, no app stores) rather than the full-scope Flutter app, to hit ~3–6 weeks pilot-ready instead of ~6–10+. Full mobile scope resumes post-pilot. See plan §4 Phase 5 for exact in/out-of-scope list.
 - 2026-08-08 — **Phase 1 complete.** Property hierarchy + staff/RBAC API built and tested end-to-end against live Supabase, including the bed-status-machine and full audit-log coverage.
 - 2026-08-08 — **Phase 2 complete.** Tenancy lifecycle built and tested end-to-end: signed onboarding tokens (no schema change needed), a tenant-context resolver parallel to resolveOrg, and Bed.status now genuinely tracks tenancy state. Also created the Storage bucket programmatically and closed a gap where test files were never actually type-checked.
+- 2026-08-08 — **Phase 3 complete.** Invoicing (due-date/grace-period math, domain-level dedup per tenancy+period) and manual payments built and tested end-to-end, idempotency_keys table added and RLS-protected, daily cron now actually generates invoices instead of being an inert placeholder.

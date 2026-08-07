@@ -2,6 +2,7 @@ import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import { clerkWebhookRoutes } from "./routes/webhooks/clerk.js";
 import { internalHealthRoutes } from "./routes/internal/health.js";
+import { internalInvoiceRoutes } from "./routes/internal/invoices.js";
 import { meRoutes } from "./routes/me.js";
 import { organizationRoutes } from "./routes/organizations.js";
 import { propertyRoutes } from "./routes/properties.js";
@@ -10,6 +11,8 @@ import { roomBedRoutes } from "./routes/rooms-beds.js";
 import { staffRoutes } from "./routes/staff.js";
 import { tenancyRoutes } from "./routes/tenancies.js";
 import { tenantSelfRoutes } from "./routes/tenant.js";
+import { invoiceRoutes } from "./routes/invoices.js";
+import { paymentRoutes } from "./routes/payments.js";
 import { fail } from "./lib/api-response.js";
 import { HttpError } from "./lib/http-errors.js";
 
@@ -46,6 +49,7 @@ export function buildApp(): FastifyInstance {
 
   app.register(clerkWebhookRoutes);
   app.register(internalHealthRoutes);
+  app.register(internalInvoiceRoutes);
   app.register(meRoutes);
   app.register(organizationRoutes);
   app.register(propertyRoutes);
@@ -54,9 +58,11 @@ export function buildApp(): FastifyInstance {
   app.register(staffRoutes);
   app.register(tenancyRoutes);
   app.register(tenantSelfRoutes);
+  app.register(invoiceRoutes);
+  app.register(paymentRoutes);
 
-  // Phase 3+ resource routes (invoices, payments, complaints, notices)
-  // register here as they're built.
+  // Phase 4+ resource routes (complaints, notices) register here as
+  // they're built.
 
   return app;
 }

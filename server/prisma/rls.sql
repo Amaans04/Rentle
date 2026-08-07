@@ -79,7 +79,8 @@ BEGIN
     'payments',
     'complaints',
     'notices',
-    'audit_logs'
+    'audit_logs',
+    'idempotency_keys'
   ]
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
@@ -124,6 +125,9 @@ CREATE POLICY tenant_isolation ON notices
   USING ("organizationId" = current_setting('app.current_org_id', true));
 
 CREATE POLICY tenant_isolation ON audit_logs
+  USING ("organizationId" = current_setting('app.current_org_id', true));
+
+CREATE POLICY tenant_isolation ON idempotency_keys
   USING ("organizationId" = current_setting('app.current_org_id', true));
 
 -- Child tables one hop from an organizationId-bearing parent (no direct
