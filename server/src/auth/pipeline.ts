@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { TenancyStatus } from "@prisma/client";
 import { Errors } from "../lib/api-response.js";
 import { prisma } from "../lib/prisma.js";
 import { verifyClerkToken } from "./clerk.js";
@@ -67,6 +68,48 @@ export async function resolveOrg(request: FastifyRequest, reply: FastifyReply): 
   }
 
   request.orgContext = { organization: member.organization, member };
+}
+
+/**
+ * Tenant equivalent of resolveOrg — tenants are never OrganizationMembers
+ * (no RBAC role of their own; see the OrgMemberRole enum), so /tenant/*
+ * routes use this instead. orgId still comes only from the URL path, same
+ * reasoning as resolveOrg. The tenant's own active tenancy is derived
+ * entirely from request.authUser.id server-side — never from a
+ * client-supplied tenancyId, which is the whole point of this resolver
+ * existing as a separate, narrower thing than resolveOrg.
+ */
+export async function resolveTenantContext(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (!request.authUser) {
+    return reply.status(401).send(Errors.unauthorized());
+  }
+
+  const parsed = orgIdParamSchema.safeParse(request.params);
+  if (!parsed.success) {
+    return reply.status(400).send(Errors.validation(parsed.error.flatten()));
+  }
+
+  const organization = await prisma.organization.findUnique({ where: { id: parsed.data.orgId } });
+  if (!organization || organization.deletedAt) {
+    return reply.status(404).send(Errors.notFound("Organization"));
+  }
+
+  const tenancy = await withOrgContext(parsed.data.orgId, (tx) =>
+    tx.tenancy.findFirst({
+      where: {
+        organizationId: parsed.data.orgId,
+        userId: request.authUser!.id,
+        deletedAt: null,
+        status: { not: TenancyStatus.ARCHIVED },
+      },
+      orderBy: { createdAt: "desc" },
+    })
+  );
+  if (!tenancy) {
+    return reply.status(404).send(Errors.notFound("Tenancy"));
+  }
+
+  request.tenantContext = { organization, tenancy };
 }
 
 /**
@@ -141,4 +184,15 @@ export function withRequestOrgContext<T>(
     throw new Error("withRequestOrgContext called before resolveOrg");
   }
   return withOrgContext(request.orgContext.organization.id, fn);
+}
+
+/** Same as withRequestOrgContext, for routes using resolveTenantContext instead of resolveOrg. */
+export function withRequestTenantContext<T>(
+  request: FastifyRequest,
+  fn: Parameters<typeof withOrgContext<T>>[1]
+): Promise<T> {
+  if (!request.tenantContext) {
+    throw new Error("withRequestTenantContext called before resolveTenantContext");
+  }
+  return withOrgContext(request.tenantContext.organization.id, fn);
 }

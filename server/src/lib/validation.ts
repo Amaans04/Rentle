@@ -20,7 +20,7 @@ export const paginationSchema = z.object({
 });
 
 /** Parses `schema` against `data`; on failure throws a ValidationError the global handler renders as 400. */
-export function parseOrThrow<T>(schema: z.ZodType<T>, data: unknown): T {
+export function parseOrThrow<T extends z.ZodTypeAny>(schema: T, data: unknown): z.infer<T> {
   const result = schema.safeParse(data);
   if (!result.success) {
     throw new ValidationError(result.error.flatten());

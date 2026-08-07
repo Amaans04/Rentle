@@ -8,6 +8,8 @@ import { propertyRoutes } from "./routes/properties.js";
 import { buildingFloorRoutes } from "./routes/buildings-floors.js";
 import { roomBedRoutes } from "./routes/rooms-beds.js";
 import { staffRoutes } from "./routes/staff.js";
+import { tenancyRoutes } from "./routes/tenancies.js";
+import { tenantSelfRoutes } from "./routes/tenant.js";
 import { fail } from "./lib/api-response.js";
 import { HttpError } from "./lib/http-errors.js";
 
@@ -50,9 +52,11 @@ export function buildApp(): FastifyInstance {
   app.register(buildingFloorRoutes);
   app.register(roomBedRoutes);
   app.register(staffRoutes);
+  app.register(tenancyRoutes);
+  app.register(tenantSelfRoutes);
 
-  // Phase 2+ resource routes (tenancies, invoices, payments, complaints,
-  // notices) register here as they're built.
+  // Phase 3+ resource routes (invoices, payments, complaints, notices)
+  // register here as they're built.
 
   return app;
 }
