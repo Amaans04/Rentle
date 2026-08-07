@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { PrismaClient, OrgMemberRole, BedStatus, AuditAction } from "@prisma/client";
+import { OrgMemberRole, BedStatus, AuditAction } from "@prisma/client";
 import { withOrgContext } from "../src/auth/db-context.js";
+import { prisma } from "../src/lib/prisma.js";
 
 /**
  * Exercises the Phase 1 exit criteria from the plan: an owner creates
@@ -33,7 +34,6 @@ vi.mock("../src/auth/clerk.js", async (importOriginal) => {
 const hasLiveDb = process.env.RUN_DB_TESTS === "true";
 
 describe.skipIf(!hasLiveDb)("Phase 1: property hierarchy + staff/RBAC", () => {
-  const prisma = new PrismaClient();
   let buildApp: typeof import("../src/app.js").buildApp;
   let app: import("fastify").FastifyInstance;
 
@@ -96,7 +96,8 @@ describe.skipIf(!hasLiveDb)("Phase 1: property hierarchy + staff/RBAC", () => {
     await prisma.organizationMember.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
     await prisma.user.deleteMany({ where: { clerkId: { in: [ownerAToken, managerAToken, ownerBToken] } } });
-    await prisma.$disconnect();
+    // Deliberately not calling prisma.$disconnect() — shared singleton, see
+    // the note in tests/isolation.test.ts.
     await app.close();
   });
 

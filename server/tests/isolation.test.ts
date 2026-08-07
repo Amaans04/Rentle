@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { PrismaClient } from "@prisma/client";
 import { withOrgContext } from "../src/auth/db-context.js";
+import { prisma } from "../src/lib/prisma.js";
 
 /**
  * The standing cross-org isolation suite required by the Phase 0 exit gate:
@@ -25,7 +25,6 @@ import { withOrgContext } from "../src/auth/db-context.js";
 const hasLiveDb = process.env.RUN_DB_TESTS === "true";
 
 describe.skipIf(!hasLiveDb)("cross-org isolation (RLS)", () => {
-  const prisma = new PrismaClient();
   let orgAId: string;
   let orgBId: string;
 
@@ -60,7 +59,10 @@ describe.skipIf(!hasLiveDb)("cross-org isolation (RLS)", () => {
   afterAll(async () => {
     await withOrgContext(orgBId, (tx) => tx.property.deleteMany({ where: { organizationId: orgBId } }), prisma);
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
-    await prisma.$disconnect();
+    // Deliberately not calling prisma.$disconnect() — this is the shared
+    // singleton (src/lib/prisma.ts), reused by every DB-backed test file in
+    // this single-process test run (see vitest.config.ts). Disconnecting
+    // here would break whichever test file runs next.
   });
 
   it("org A's session context cannot SELECT org B's properties via the ORM", async () => {
