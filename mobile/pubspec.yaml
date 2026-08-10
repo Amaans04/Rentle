@@ -50,6 +50,8 @@ dependencies:
   # package clerk_flutter itself uses because interceptors make it easy to
   # auto-attach the Clerk session token to every request in one place.
   dio: ^5.7.0
+  shared_preferences: ^2.5.5
+  image_picker: ^1.2.3
 
 dev_dependencies:
   flutter_test:

@@ -6,6 +6,7 @@ import '../config/env.dart';
 /// need to know anything about the auth SDK's shape, just how to get a
 /// bearer token when it needs one.
 class ApiClient {
+  // ignore: prefer_initializing_formals — the field is private, this named param can't be.
   ApiClient({required Future<String?> Function() getToken}) : _getToken = getToken {
     dio = Dio(
       BaseOptions(baseUrl: Env.apiBaseUrl, connectTimeout: const Duration(seconds: 15)),

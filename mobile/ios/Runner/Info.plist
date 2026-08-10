@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Rentle uses your photo library to attach tenant documents like ID proof and signed agreements.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Rentle uses your camera to scan tenant documents like ID proof and signed agreements.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

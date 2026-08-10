@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The debug/profile manifests already carry this for Flutter tooling,
+         but the app itself needs it in every build variant (including
+         release, which is what sideloading actually ships) — it makes real
+         network calls to Clerk and the API server, not just dev tooling. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="mobile"
         android:name="${applicationName}"
