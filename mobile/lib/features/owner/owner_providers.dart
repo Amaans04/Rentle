@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/api_providers.dart';
 import '../../core/models/property_models.dart';
@@ -7,6 +8,7 @@ import '../../core/models/complaint_models.dart';
 import '../../core/models/document_models.dart';
 import '../../core/models/user_models.dart';
 import '../../core/models/discovery_models.dart';
+import '../../core/models/notice_models.dart';
 
 typedef PropertyKey = ({String orgId, String propertyId});
 typedef BuildingKey = ({String orgId, String buildingId});
@@ -118,4 +120,33 @@ final joinRequestsProvider = FutureProvider.family<List<JoinRequest>, JoinReques
     queryParameters: key.status != null ? {'status': key.status} : null,
   );
   return (res.data['data'] as List).map((e) => JoinRequest.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+// --- Staff management ---
+
+final fullOrgMembersProvider = FutureProvider.family<List<OrgMember>, String>((ref, orgId) async {
+  final api = ref.watch(apiClientProvider);
+  final res = await api.dio.get('/organizations/$orgId/members');
+  return (res.data['data'] as List).map((e) => OrgMember.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+typedef StaffProfileKey = ({String orgId, String memberId});
+
+final staffProfileProvider = FutureProvider.family<StaffProfile?, StaffProfileKey>((ref, key) async {
+  final api = ref.watch(apiClientProvider);
+  try {
+    final res = await api.dio.get('/organizations/${key.orgId}/members/${key.memberId}/staff-profile');
+    return StaffProfile.fromJson(res.data['data'] as Map<String, dynamic>);
+  } on DioException catch (e) {
+    if (e.response?.statusCode == 404) return null; // no profile set yet — not an error
+    rethrow;
+  }
+});
+
+// --- Notices ---
+
+final noticesProvider = FutureProvider.family<List<Notice>, PropertyKey>((ref, key) async {
+  final api = ref.watch(apiClientProvider);
+  final res = await api.dio.get('/organizations/${key.orgId}/properties/${key.propertyId}/notices');
+  return (res.data['data'] as List).map((e) => Notice.fromJson(e as Map<String, dynamic>)).toList();
 });

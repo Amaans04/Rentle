@@ -4,11 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/invite_code.dart';
 import '../../../core/models/property_models.dart';
 import '../../../core/providers/api_providers.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/async_value_view.dart';
 import '../owner_providers.dart';
 
 class TenantInviteScreen extends ConsumerStatefulWidget {
-  const TenantInviteScreen({super.key, required this.orgId, required this.property});
+  const TenantInviteScreen({
+    super.key,
+    required this.orgId,
+    required this.property,
+  });
 
   final String orgId;
   final Property property;
@@ -46,7 +51,10 @@ class _TenantInviteScreenState extends ConsumerState<TenantInviteScreen> {
       );
       final token = (res.data['data'] as Map)['token'] as String;
       setState(() {
-        _inviteCode = InviteCode(organizationId: widget.orgId, token: token).encode();
+        _inviteCode = InviteCode(
+          organizationId: widget.orgId,
+          token: token,
+        ).encode();
       });
     } catch (e) {
       if (mounted) showErrorSnackBar(context, e);
@@ -60,9 +68,14 @@ class _TenantInviteScreenState extends ConsumerState<TenantInviteScreen> {
     final key = (orgId: widget.orgId, propertyId: widget.property.id);
     final vacantBeds = ref.watch(vacantBedsProvider(key));
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Invite tenant')),
-      body: _inviteCode != null ? _buildInviteCodeView() : _buildForm(vacantBeds),
+    return PopScope(
+      canPop: !_saving,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Invite tenant')),
+        body: _inviteCode != null
+            ? _buildInviteCodeView()
+            : _buildForm(vacantBeds),
+      ),
     );
   }
 
@@ -72,7 +85,24 @@ class _TenantInviteScreenState extends ConsumerState<TenantInviteScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.check_circle, color: Colors.green, size: 48),
+          // A rare, one-per-invite success moment — a small scale+fade
+          // entrance is the kind of delight the animation skill reserves
+          // specifically for infrequent, positive-outcome events, not
+          // something a PG owner sees dozens of times a session.
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutBack,
+            builder: (context, t, child) => Opacity(
+              opacity: t.clamp(0, 1),
+              child: Transform.scale(scale: t, child: child),
+            ),
+            child: Icon(
+              Icons.check_circle,
+              color: context.semanticColors.success,
+              size: 48,
+            ),
+          ),
           const SizedBox(height: 12),
           const Text(
             'Invite created. Share this code with the tenant (WhatsApp/SMS) — '
@@ -81,8 +111,14 @@ class _TenantInviteScreenState extends ConsumerState<TenantInviteScreen> {
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)),
-            child: SelectableText(_inviteCode!, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: SelectableText(
+              _inviteCode!,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
@@ -90,11 +126,16 @@ class _TenantInviteScreenState extends ConsumerState<TenantInviteScreen> {
             label: const Text('Copy code'),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: _inviteCode!));
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied.')));
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Copied.')));
             },
           ),
           const SizedBox(height: 24),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Done')),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Done'),
+          ),
         ],
       ),
     );
@@ -112,17 +153,28 @@ class _TenantInviteScreenState extends ConsumerState<TenantInviteScreen> {
               if (beds.isEmpty) {
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Text('No vacant beds. Add a room/bed first, or free one up.'),
+                  child: Text(
+                    'No vacant beds. Add a room/bed first, or free one up.',
+                  ),
                 );
               }
               return DropdownButtonFormField<Bed>(
                 initialValue: _selectedBed,
                 decoration: const InputDecoration(labelText: 'Vacant bed'),
-                items: beds.map((b) => DropdownMenuItem(value: b, child: Text('Bed ${b.bedLabel}'))).toList(),
+                items: beds
+                    .map(
+                      (b) => DropdownMenuItem(
+                        value: b,
+                        child: Text('Bed ${b.bedLabel}'),
+                      ),
+                    )
+                    .toList(),
                 onChanged: (b) {
                   setState(() {
                     _selectedBed = b;
-                    if (b?.rentAmount != null) _rentAmount.text = b!.rentAmount!.toStringAsFixed(0);
+                    if (b?.rentAmount != null) {
+                      _rentAmount.text = b!.rentAmount!.toStringAsFixed(0);
+                    }
                   });
                 },
               );
@@ -131,21 +183,27 @@ class _TenantInviteScreenState extends ConsumerState<TenantInviteScreen> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _rentAmount,
-            decoration: const InputDecoration(labelText: 'Rent amount (₹/month)'),
+            decoration: const InputDecoration(
+              labelText: 'Rent amount (₹/month)',
+            ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            validator: (v) => double.tryParse(v ?? '') == null ? 'Required' : null,
+            validator: (v) =>
+                double.tryParse(v ?? '') == null ? 'Required' : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _depositAmount,
             decoration: const InputDecoration(labelText: 'Deposit amount (₹)'),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            validator: (v) => double.tryParse(v ?? '') == null ? 'Required' : null,
+            validator: (v) =>
+                double.tryParse(v ?? '') == null ? 'Required' : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _expiresInDays,
-            decoration: const InputDecoration(labelText: 'Invite expires in (days, max 30)'),
+            decoration: const InputDecoration(
+              labelText: 'Invite expires in (days, max 30)',
+            ),
             keyboardType: TextInputType.number,
             validator: (v) {
               final n = int.tryParse(v ?? '');
@@ -156,7 +214,11 @@ class _TenantInviteScreenState extends ConsumerState<TenantInviteScreen> {
           FilledButton(
             onPressed: _saving ? null : _invite,
             child: _saving
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Text('Create invite'),
           ),
         ],

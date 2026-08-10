@@ -4,6 +4,7 @@ import '../../../core/format.dart';
 import '../../../core/models/discovery_models.dart';
 import '../../../core/models/property_models.dart';
 import '../../../core/providers/api_providers.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/async_value_view.dart';
 import '../owner_providers.dart';
 
@@ -57,12 +58,12 @@ class JoinRequestsScreen extends ConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.close, color: Colors.redAccent),
+                      icon: Icon(Icons.close, color: Theme.of(context).colorScheme.error),
                       tooltip: 'Reject',
                       onPressed: () => _reject(context, ref, request, key),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.check_circle, color: Colors.green),
+                      icon: Icon(Icons.check_circle, color: context.semanticColors.success),
                       tooltip: 'Approve',
                       onPressed: () => _approve(context, ref, request, key),
                     ),
@@ -91,7 +92,7 @@ class JoinRequestsScreen extends ConsumerWidget {
           actions: [
             TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
               onPressed: () => Navigator.of(context).pop(controller.text),
               child: const Text('Reject'),
             ),

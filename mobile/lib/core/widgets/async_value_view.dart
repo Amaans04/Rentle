@@ -13,23 +13,58 @@ class AsyncValueView<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return value.when(
-      data: (d) => data(context, d),
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 40, color: Colors.redAccent),
-              const SizedBox(height: 12),
-              Text(ApiException.from(err).message, textAlign: TextAlign.center),
-              if (onRetry != null) ...[
-                const SizedBox(height: 16),
-                FilledButton(onPressed: onRetry, child: const Text('Retry')),
+    // Crossfades loading -> content/error instead of an abrupt cut — the one
+    // AsyncValue state change every list/detail screen in the app goes
+    // through, so it's the single highest-leverage animation in the app.
+    // Keyed on the *kind* of state (not the data itself), so a pull-to-refresh
+    // that yields new data of the same kind doesn't re-trigger the fade —
+    // that would be seen dozens of times a session and read as flicker, not
+    // polish.
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 200),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      child: value.when(
+        data: (d) => KeyedSubtree(key: const ValueKey('data'), child: data(context, d)),
+        loading: () => const Center(key: ValueKey('loading'), child: CircularProgressIndicator()),
+        error: (err, stackTrace) => Center(
+          key: const ValueKey('error'),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline, size: 40, color: Theme.of(context).colorScheme.error),
+                const SizedBox(height: 12),
+                Text(ApiException.from(err).message, textAlign: TextAlign.center),
+                if (onRetry != null) ...[
+                  const SizedBox(height: 16),
+                  FilledButton(onPressed: onRetry, child: const Text('Retry')),
+                ],
+                // Pilot-stage escape hatch: an unexpected (non-server) error
+                // is exactly the case where the friendly message above isn't
+                // enough to debug from a screenshot — this makes the real
+                // exception + stack trace visible without needing a live
+                // debugger attached to the device.
+                const SizedBox(height: 8),
+                ExpansionTile(
+                  title: const Text('Details', style: TextStyle(fontSize: 12)),
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: const EdgeInsets.only(bottom: 12),
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHigh, borderRadius: BorderRadius.circular(8)),
+                      child: SelectableText(
+                        '$err\n\n$stackTrace',
+                        style: const TextStyle(fontFamily: 'monospace', fontSize: 10),
+                      ),
+                    ),
+                  ],
+                ),
               ],
-            ],
+            ),
           ),
         ),
       ),

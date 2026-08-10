@@ -1,16 +1,20 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'core/api/api_client.dart';
 import 'core/app_router.dart';
 import 'core/config/env.dart';
-import 'core/providers/api_providers.dart';
+import 'core/theme/app_theme.dart';
 
 void main() {
   runApp(const ProviderScope(child: RentleApp()));
 }
 
+/// `appRouter` (core/app_router.dart) is created once, at module load, and
+/// MaterialApp.router is the app's actual root — nothing here is ever
+/// rebuilt or replaced by Clerk's own internal state changes. See
+/// AuthGate's doc comment (app_router.dart) for why that matters: it used
+/// to be the other way around (ClerkAuthBuilder wrapping the Router), and
+/// that caused a real bug.
 class RentleApp extends StatelessWidget {
   const RentleApp({super.key});
 
@@ -18,59 +22,12 @@ class RentleApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClerkAuth(
       config: ClerkAuthConfig(publishableKey: Env.clerkPublishableKey),
-      child: MaterialApp(
+      child: MaterialApp.router(
         title: 'Rentle',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)), useMaterial3: true),
-        home: const Scaffold(
-          body: SafeArea(
-            child: ClerkErrorListener(
-              child: ClerkAuthBuilder(signedInBuilder: _signedIn, signedOutBuilder: _signedOut),
-            ),
-          ),
-        ),
+        theme: buildAppTheme(),
+        routerConfig: appRouter,
       ),
-    );
-  }
-
-  static Widget _signedIn(BuildContext context, ClerkAuthState authState) {
-    return _SignedInRoot(authState: authState);
-  }
-
-  static Widget _signedOut(BuildContext context, ClerkAuthState authState) {
-    return const ClerkAuthentication();
-  }
-}
-
-/// One ApiClient + one GoRouter per signed-in session, scoped via a nested
-/// ProviderScope override — everything under here can `ref.watch(apiClientProvider)`
-/// without knowing anything about Clerk's session-token shape.
-class _SignedInRoot extends StatefulWidget {
-  const _SignedInRoot({required this.authState});
-
-  final ClerkAuthState authState;
-
-  @override
-  State<_SignedInRoot> createState() => _SignedInRootState();
-}
-
-class _SignedInRootState extends State<_SignedInRoot> {
-  late final ApiClient _apiClient = ApiClient(
-    getToken: () async {
-      final token = await widget.authState.sessionToken();
-      return token.jwt;
-    },
-  );
-  late final GoRouter _router = buildAppRouter();
-
-  @override
-  Widget build(BuildContext context) {
-    return ProviderScope(
-      overrides: [
-        apiClientProvider.overrideWithValue(_apiClient),
-        clerkAuthStateProvider.overrideWithValue(widget.authState),
-      ],
-      child: Router.withConfig(config: _router),
     );
   }
 }

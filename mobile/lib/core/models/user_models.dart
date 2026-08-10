@@ -58,3 +58,59 @@ class OrgMemberSummary {
     );
   }
 }
+
+/// Full membership row for the staff-management screens — unlike
+/// [OrgMemberSummary] (a narrow projection for the complaint-assignee
+/// dropdown), this carries everything GET /organizations/:orgId/members
+/// actually returns, including `id` (the membership id PATCH/DELETE
+/// /members/:memberId expect, NOT userId).
+class OrgMember {
+  OrgMember({
+    required this.id,
+    required this.userId,
+    required this.role,
+    required this.propertyIds,
+    required this.isActive,
+    this.userName,
+    this.userEmail,
+    this.userPhone,
+  });
+
+  final String id;
+  final String userId;
+  final String role;
+  final List<String> propertyIds;
+  final bool isActive;
+  final String? userName;
+  final String? userEmail;
+  final String? userPhone;
+
+  bool get isUnrestricted => propertyIds.isEmpty;
+  String get displayName => userName?.isNotEmpty == true ? userName! : (userEmail ?? userPhone ?? 'Unnamed');
+
+  factory OrgMember.fromJson(Map<String, dynamic> json) {
+    final user = json['user'] as Map<String, dynamic>?;
+    return OrgMember(
+      id: json['id'] as String,
+      userId: json['userId'] as String,
+      role: json['role'] as String,
+      propertyIds: (json['propertyIds'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      isActive: json['isActive'] as bool? ?? true,
+      userName: user?['name'] as String?,
+      userEmail: user?['email'] as String?,
+      userPhone: user?['phone'] as String?,
+    );
+  }
+}
+
+class StaffProfile {
+  StaffProfile({this.salary, this.joinDate});
+
+  final double? salary;
+  final DateTime? joinDate;
+
+  factory StaffProfile.fromJson(Map<String, dynamic> json) => StaffProfile(
+    salary: json['salary'] == null ? null : double.tryParse(json['salary'].toString()),
+    joinDate: json['joinDate'] == null ? null : DateTime.tryParse(json['joinDate'] as String),
+  );
+}

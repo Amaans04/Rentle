@@ -3,24 +3,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/format.dart';
 import '../../../core/models/property_models.dart';
 import '../../../core/models/tenancy_models.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/async_value_view.dart';
 import '../owner_providers.dart';
 import 'tenant_detail_screen.dart';
 
 const _statusFilters = [null, 'PENDING_ONBOARDING', 'ACTIVE', 'NOTICE_GIVEN', 'ARCHIVED'];
 
-Color tenancyStatusColor(String status) {
+Color tenancyStatusColor(BuildContext context, String status) {
+  final scheme = Theme.of(context).colorScheme;
+  final semantic = context.semanticColors;
   switch (status) {
     case 'ACTIVE':
-      return Colors.green;
+      return semantic.success;
     case 'PENDING_ONBOARDING':
-      return Colors.orange;
+      return semantic.warning;
     case 'NOTICE_GIVEN':
-      return Colors.deepOrange;
+      return scheme.error;
     case 'ARCHIVED':
-      return Colors.grey;
+      return scheme.onSurfaceVariant;
     default:
-      return Colors.blueGrey;
+      return scheme.outline;
   }
 }
 
@@ -85,7 +88,7 @@ class _TenantsListScreenState extends ConsumerState<TenantsListScreen> {
                     final tenancy = list[index];
                     return ListTile(
                       leading: CircleAvatar(
-                        backgroundColor: tenancyStatusColor(tenancy.status),
+                        backgroundColor: tenancyStatusColor(context, tenancy.status),
                         child: Text(
                           tenancy.displayName.isNotEmpty ? tenancy.displayName[0].toUpperCase() : '?',
                           style: const TextStyle(color: Colors.white),

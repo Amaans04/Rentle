@@ -4,6 +4,7 @@ import '../../core/models/tenancy_models.dart';
 import '../../core/models/complaint_models.dart';
 import '../../core/models/document_models.dart';
 import '../../core/models/discovery_models.dart';
+import '../../core/models/notice_models.dart';
 
 final propertySearchProvider = FutureProvider.family<List<PropertyListing>, String>((ref, query) async {
   if (query.trim().length < 2) return const [];
@@ -34,6 +35,12 @@ final tenantDocumentsProvider = FutureProvider.family<List<TenantDocument>, Stri
   final api = ref.watch(apiClientProvider);
   final res = await api.dio.get('/organizations/$orgId/tenant/documents');
   return (res.data['data'] as List).map((e) => TenantDocument.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+final tenantNoticesProvider = FutureProvider.family<List<Notice>, String>((ref, orgId) async {
+  final api = ref.watch(apiClientProvider);
+  final res = await api.dio.get('/organizations/$orgId/tenant/notices');
+  return (res.data['data'] as List).map((e) => Notice.fromJson(e as Map<String, dynamic>)).toList();
 });
 
 typedef TenantComplaintKey = ({String orgId, String complaintId});

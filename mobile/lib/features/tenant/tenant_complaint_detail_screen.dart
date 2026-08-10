@@ -55,8 +55,8 @@ class _TenantComplaintDetailScreenState extends ConsumerState<TenantComplaintDet
           children: [
             Chip(
               label: Text(titleCase(c.status)),
-              backgroundColor: complaintStatusColor(c.status).withValues(alpha: 0.15),
-              labelStyle: TextStyle(color: complaintStatusColor(c.status)),
+              backgroundColor: complaintStatusColor(context, c.status).withValues(alpha: 0.15),
+              labelStyle: TextStyle(color: complaintStatusColor(context, c.status)),
             ),
             const SizedBox(height: 12),
             Text(c.title, style: Theme.of(context).textTheme.titleLarge),

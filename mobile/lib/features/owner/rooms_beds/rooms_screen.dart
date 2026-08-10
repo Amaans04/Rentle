@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/format.dart';
 import '../../../core/models/property_models.dart';
 import '../../../core/providers/api_providers.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/async_value_view.dart';
 import '../../../core/widgets/confirm_delete.dart';
 import '../owner_providers.dart';
@@ -10,18 +11,20 @@ import 'bed_form_sheet.dart';
 import 'bed_status_sheet.dart';
 import 'room_form_sheet.dart';
 
-Color bedStatusColor(String status) {
+Color bedStatusColor(BuildContext context, String status) {
+  final scheme = Theme.of(context).colorScheme;
+  final semantic = context.semanticColors;
   switch (status) {
     case 'VACANT':
-      return Colors.green;
+      return semantic.success;
     case 'OCCUPIED':
-      return Colors.blue;
+      return scheme.primary;
     case 'RESERVED':
-      return Colors.orange;
+      return semantic.warning;
     case 'BLOCKED':
-      return Colors.red;
+      return scheme.error;
     default:
-      return Colors.grey;
+      return scheme.outline;
   }
 }
 
@@ -134,7 +137,7 @@ class RoomsScreen extends ConsumerWidget {
                           dense: true,
                           leading: CircleAvatar(
                             radius: 12,
-                            backgroundColor: bedStatusColor(bed.status),
+                            backgroundColor: bedStatusColor(context, bed.status),
                             child: Text(bed.bedLabel, style: const TextStyle(fontSize: 10, color: Colors.white)),
                           ),
                           title: Text('Bed ${bed.bedLabel}'),

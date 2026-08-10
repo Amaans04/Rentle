@@ -3,25 +3,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/format.dart';
 import '../../../core/models/invoice_models.dart';
 import '../../../core/models/property_models.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/async_value_view.dart';
 import '../owner_providers.dart';
 import 'invoice_detail_screen.dart';
 
 const _statusFilters = [null, 'SENT', 'OVERDUE', 'PARTIALLY_PAID', 'PAID'];
 
-Color invoiceStatusColor(String status) {
+Color invoiceStatusColor(BuildContext context, String status) {
+  final scheme = Theme.of(context).colorScheme;
+  final semantic = context.semanticColors;
   switch (status) {
     case 'PAID':
-      return Colors.green;
+      return semantic.success;
     case 'PARTIALLY_PAID':
-      return Colors.orange;
+      return semantic.warning;
     case 'OVERDUE':
-      return Colors.red;
+      return scheme.error;
     case 'VOID':
     case 'REFUNDED':
-      return Colors.grey;
+      return scheme.onSurfaceVariant;
     default:
-      return Colors.blueGrey;
+      return scheme.outline;
   }
 }
 
@@ -86,7 +89,7 @@ class _InvoicesListScreenState extends ConsumerState<InvoicesListScreen> {
                     final invoice = list[index];
                     return ListTile(
                       leading: CircleAvatar(
-                        backgroundColor: invoiceStatusColor(invoice.status),
+                        backgroundColor: invoiceStatusColor(context, invoice.status),
                         child: const Icon(Icons.receipt, color: Colors.white, size: 18),
                       ),
                       title: Text(invoice.invoiceNumber),

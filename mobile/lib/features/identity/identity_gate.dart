@@ -98,7 +98,7 @@ class _IdentityGateState extends ConsumerState<IdentityGate> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline, size: 40, color: Colors.redAccent),
+                Icon(Icons.error_outline, size: 40, color: Theme.of(context).colorScheme.error),
                 const SizedBox(height: 12),
                 Text(_error!, textAlign: TextAlign.center),
                 const SizedBox(height: 16),

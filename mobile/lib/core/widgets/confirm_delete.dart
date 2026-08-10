@@ -9,7 +9,7 @@ Future<bool> confirmDelete(BuildContext context, {required String title, require
       actions: [
         TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
         FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: Colors.red),
+          style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
           onPressed: () => Navigator.of(context).pop(true),
           child: const Text('Delete'),
         ),

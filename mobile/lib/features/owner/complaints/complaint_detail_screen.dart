@@ -90,14 +90,14 @@ class _ComplaintDetailScreenState extends ConsumerState<ComplaintDetailScreen> {
                   children: [
                     Chip(
                       label: Text(titleCase(c.status)),
-                      backgroundColor: complaintStatusColor(c.status).withValues(alpha: 0.15),
-                      labelStyle: TextStyle(color: complaintStatusColor(c.status)),
+                      backgroundColor: complaintStatusColor(context, c.status).withValues(alpha: 0.15),
+                      labelStyle: TextStyle(color: complaintStatusColor(context, c.status)),
                     ),
                     const SizedBox(width: 8),
                     Chip(
                       label: Text(c.priority),
-                      backgroundColor: priorityColor(c.priority).withValues(alpha: 0.15),
-                      labelStyle: TextStyle(color: priorityColor(c.priority)),
+                      backgroundColor: priorityColor(context, c.priority).withValues(alpha: 0.15),
+                      labelStyle: TextStyle(color: priorityColor(context, c.priority)),
                     ),
                   ],
                 ),

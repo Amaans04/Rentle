@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/format.dart';
 import '../../../core/models/invoice_models.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/async_value_view.dart';
 import '../owner_providers.dart';
 import 'invoices_list_screen.dart' show invoiceStatusColor;
@@ -39,8 +40,8 @@ class InvoiceDetailScreen extends ConsumerWidget {
                         children: [
                           Chip(
                             label: Text(titleCase(inv.status)),
-                            backgroundColor: invoiceStatusColor(inv.status).withValues(alpha: 0.15),
-                            labelStyle: TextStyle(color: invoiceStatusColor(inv.status)),
+                            backgroundColor: invoiceStatusColor(context, inv.status).withValues(alpha: 0.15),
+                            labelStyle: TextStyle(color: invoiceStatusColor(context, inv.status)),
                           ),
                           const Spacer(),
                           Text(formatMoney(inv.totalAmount), style: Theme.of(context).textTheme.titleLarge),
@@ -75,7 +76,7 @@ class InvoiceDetailScreen extends ConsumerWidget {
                   (p) => ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.check_circle_outline, color: Colors.green),
+                    leading: Icon(Icons.check_circle_outline, color: context.semanticColors.success),
                     title: Text(formatMoney(p.amount)),
                     subtitle: Text('${titleCase(p.method)}${p.utr != null ? ' · ${p.utr}' : ''}'),
                     trailing: Text(formatDate(p.paidAt)),

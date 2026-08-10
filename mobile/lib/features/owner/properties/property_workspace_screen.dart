@@ -13,6 +13,8 @@ import '../tenants/join_requests_screen.dart';
 import '../invoices/invoices_list_screen.dart';
 import '../invoices/generate_invoices_sheet.dart';
 import '../complaints/complaints_list_screen.dart';
+import '../notices/notice_form_sheet.dart';
+import '../notices/notices_list_screen.dart';
 import 'property_form_screen.dart';
 
 /// Everything for one property lives here as tabs — matches how an owner
@@ -38,7 +40,7 @@ class _PropertyWorkspaceScreenState extends ConsumerState<PropertyWorkspaceScree
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     _tabController.addListener(() => setState(() {}));
   }
 
@@ -113,14 +115,30 @@ class _PropertyWorkspaceScreenState extends ConsumerState<PropertyWorkspaceScree
           ref.invalidate(invoicesProvider((orgId: widget.orgId, propertyId: _property.id, status: null)));
         }
         break;
+      case 5:
+        final posted = await showModalBottomSheet<bool>(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => NoticeFormSheet(orgId: widget.orgId, propertyId: _property.id),
+        );
+        if (posted == true) ref.invalidate(noticesProvider(_key));
+        break;
     }
   }
 
+  // Sparse — Complaints (3) and Requests (4) have no FAB action, matching
+  // how those tabs already work (complaints only come from tenants;
+  // requests are approved/rejected inline, not "created" by the owner).
+  static const _fabByTab = {
+    0: (icon: Icons.add_business, label: 'Add building'),
+    1: (icon: Icons.person_add, label: 'Invite tenant'),
+    2: (icon: Icons.receipt_long, label: 'Generate invoices'),
+    5: (icon: Icons.campaign, label: 'New notice'),
+  };
+
   @override
   Widget build(BuildContext context) {
-    final showFab = _tabController.index < 3;
-    const fabLabels = ['Add building', 'Invite tenant', 'Generate invoices'];
-    const fabIcons = [Icons.add_business, Icons.person_add, Icons.receipt_long];
+    final fab = _fabByTab[_tabController.index];
 
     return Scaffold(
       appBar: AppBar(
@@ -149,6 +167,7 @@ class _PropertyWorkspaceScreenState extends ConsumerState<PropertyWorkspaceScree
             Tab(text: 'Invoices'),
             Tab(text: 'Complaints'),
             Tab(text: 'Requests'),
+            Tab(text: 'Notices'),
           ],
         ),
       ),
@@ -160,15 +179,26 @@ class _PropertyWorkspaceScreenState extends ConsumerState<PropertyWorkspaceScree
           InvoicesListScreen(orgId: widget.orgId, property: _property),
           ComplaintsListScreen(orgId: widget.orgId, property: _property),
           JoinRequestsScreen(orgId: widget.orgId, property: _property),
+          NoticesListScreen(orgId: widget.orgId, property: _property),
         ],
       ),
-      floatingActionButton: showFab
-          ? FloatingActionButton.extended(
-              onPressed: _onFabPressed,
-              icon: Icon(fabIcons[_tabController.index]),
-              label: Text(fabLabels[_tabController.index]),
-            )
-          : null,
+      // The FAB's action genuinely changes meaning with the tab (add
+      // building vs invite tenant vs generate invoices) — a scale+fade swap
+      // is the standard Material pattern for that, and it's seen every time
+      // an owner switches tabs, so it earns a real transition rather than
+      // an abrupt icon/label swap.
+      floatingActionButton: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: FadeTransition(opacity: animation, child: child)),
+        child: fab != null
+            ? FloatingActionButton.extended(
+                key: ValueKey(_tabController.index),
+                onPressed: _onFabPressed,
+                icon: Icon(fab.icon),
+                label: Text(fab.label),
+              )
+            : const SizedBox.shrink(key: ValueKey('none')),
+      ),
     );
   }
 }

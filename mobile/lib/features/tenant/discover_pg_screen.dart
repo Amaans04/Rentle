@@ -54,7 +54,12 @@ class _DiscoverPgScreenState extends ConsumerState<DiscoverPgScreen> {
         data: {'propertyId': listing.propertyId, if (message.trim().isNotEmpty) 'message': message.trim()},
       );
       await TenantPrefs.setPendingJoinOrgId(listing.organizationId);
-      if (mounted) context.go('/tenant/${listing.organizationId}/join-request-status');
+      // Route through `/` and let IdentityGate pick up the pending request
+      // from TenantPrefs — same reasoning as register_pg_screen.dart's fix:
+      // this call also collapses a multi-page stack in one `.go()`, so it
+      // reuses IdentityGate's already-correct navigation instead of
+      // computing the destination here directly.
+      if (mounted) context.go('/');
     } catch (e) {
       if (mounted) showErrorSnackBar(context, e);
     }

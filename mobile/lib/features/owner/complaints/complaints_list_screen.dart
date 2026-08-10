@@ -3,39 +3,44 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/format.dart';
 import '../../../core/models/complaint_models.dart';
 import '../../../core/models/property_models.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/async_value_view.dart';
 import '../owner_providers.dart';
 import 'complaint_detail_screen.dart';
 
 const _statusFilters = [null, 'OPEN', 'IN_PROGRESS', 'ESCALATED', 'RESOLVED', 'CLOSED'];
 
-Color complaintStatusColor(String status) {
+Color complaintStatusColor(BuildContext context, String status) {
+  final scheme = Theme.of(context).colorScheme;
+  final semantic = context.semanticColors;
   switch (status) {
     case 'OPEN':
-      return Colors.red;
+      return semantic.warning;
     case 'IN_PROGRESS':
-      return Colors.orange;
+      return scheme.primary;
     case 'ESCALATED':
-      return Colors.deepPurple;
+      return scheme.error;
     case 'RESOLVED':
-      return Colors.green;
+      return semantic.success;
     case 'CLOSED':
-      return Colors.grey;
+      return scheme.onSurfaceVariant;
     default:
-      return Colors.blueGrey;
+      return scheme.outline;
   }
 }
 
-Color priorityColor(String priority) {
+Color priorityColor(BuildContext context, String priority) {
+  final scheme = Theme.of(context).colorScheme;
+  final semantic = context.semanticColors;
   switch (priority) {
     case 'URGENT':
-      return Colors.red;
+      return scheme.error;
     case 'HIGH':
-      return Colors.orange;
+      return semantic.warning;
     case 'MEDIUM':
-      return Colors.blue;
+      return scheme.primary;
     default:
-      return Colors.grey;
+      return scheme.outline;
   }
 }
 
@@ -100,15 +105,15 @@ class _ComplaintsListScreenState extends ConsumerState<ComplaintsListScreen> {
                     final c = list[index];
                     return ListTile(
                       leading: CircleAvatar(
-                        backgroundColor: complaintStatusColor(c.status),
+                        backgroundColor: complaintStatusColor(context, c.status),
                         child: const Icon(Icons.report_problem, color: Colors.white, size: 18),
                       ),
                       title: Text(c.title),
                       subtitle: Text('${c.reporterName ?? 'Tenant'} · ${titleCase(c.status)}'),
                       trailing: Chip(
                         label: Text(c.priority, style: const TextStyle(fontSize: 11)),
-                        backgroundColor: priorityColor(c.priority).withValues(alpha: 0.15),
-                        labelStyle: TextStyle(color: priorityColor(c.priority)),
+                        backgroundColor: priorityColor(context, c.priority).withValues(alpha: 0.15),
+                        labelStyle: TextStyle(color: priorityColor(context, c.priority)),
                         visualDensity: VisualDensity.compact,
                       ),
                       onTap: () async {

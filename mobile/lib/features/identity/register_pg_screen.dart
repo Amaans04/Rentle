@@ -31,7 +31,7 @@ class _RegisterPgScreenState extends ConsumerState<RegisterPgScreen> {
       _error = null;
     });
     try {
-      await ref.read(clerkAuthStateProvider).createOrganization(name: _name.text.trim());
+      await ref.read(clerkAuthStateHolderProvider)!.createOrganization(name: _name.text.trim());
       await _waitForMembership();
     } catch (e) {
       if (!mounted) return;
@@ -55,8 +55,18 @@ class _RegisterPgScreenState extends ConsumerState<RegisterPgScreen> {
         final res = await api.dio.get('/me');
         final memberships = (res.data['data']['memberships'] as List);
         if (memberships.isNotEmpty) {
-          final orgId = memberships.first['organizationId'] as String;
-          if (mounted) context.go('/org/$orgId/properties');
+          // Deliberately route back to `/` and let IdentityGate re-resolve
+          // and pick the destination, rather than computing
+          // `/org/$orgId/properties` here directly — this call collapses
+          // three stacked pages (`/` -> `/no-access` -> `/register-pg`) into
+          // one in a single `.go()`, which surfaced a real bug (2026-08-10,
+          // real device): the new page landed outside the signed-in
+          // ProviderScope override, throwing "apiClientProvider was read
+          // before the signed-in ProviderScope override was applied."
+          // IdentityGate's own `_goToOrg` call already does this exact
+          // navigation correctly for every staff sign-in, so reusing it
+          // sidesteps the bug instead of chasing its exact mechanism.
+          if (mounted) context.go('/');
           return;
         }
       } catch (_) {
@@ -103,7 +113,7 @@ class _RegisterPgScreenState extends ConsumerState<RegisterPgScreen> {
           ),
           if (_error != null) ...[
             const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
+            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ],
           const SizedBox(height: 20),
           FilledButton(onPressed: _register, child: const Text('Register my PG')),

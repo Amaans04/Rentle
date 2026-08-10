@@ -6,7 +6,6 @@ import '../../core/models/discovery_models.dart';
 import '../../core/providers/api_providers.dart';
 import '../../core/tenant_prefs.dart';
 import '../../core/widgets/async_value_view.dart';
-import 'discover_pg_screen.dart';
 import 'tenant_providers.dart';
 
 /// Shown while a submitted join request is PENDING, and to resolve it once
@@ -88,12 +87,22 @@ class _JoinRequestStatusScreenState extends ConsumerState<JoinRequestStatusScree
           final request = list.first; // server orders newest first
           WidgetsBinding.instance.addPostFrameCallback((_) => _handleResolved(request));
 
-          return switch (request.status) {
-            'PENDING' => _pendingView(request),
-            'REJECTED' => _rejectedView(request),
-            'CANCELLED' => _cancelledView(),
-            _ => const Center(child: CircularProgressIndicator()),
-          };
+          // This screen's entire purpose is "wait, then the state changes" —
+          // the one moment in the app most worth a smooth transition instead
+          // of an abrupt cut when the wait finally ends.
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            switchInCurve: Curves.easeOut,
+            child: KeyedSubtree(
+              key: ValueKey(request.status),
+              child: switch (request.status) {
+                'PENDING' => _pendingView(request),
+                'REJECTED' => _rejectedView(request),
+                'CANCELLED' => _cancelledView(),
+                _ => const Center(child: CircularProgressIndicator()),
+              },
+            ),
+          );
         },
       ),
     );
@@ -154,11 +163,7 @@ class _JoinRequestStatusScreenState extends ConsumerState<JoinRequestStatusScree
             FilledButton(
               onPressed: () async {
                 await TenantPrefs.clearPendingJoinOrgId();
-                if (mounted) {
-                  Navigator.of(
-                    context,
-                  ).pushReplacement(MaterialPageRoute(builder: (_) => const DiscoverPgScreen()));
-                }
+                if (mounted) context.go('/discover-pg');
               },
               child: const Text('Search again'),
             ),
@@ -178,7 +183,7 @@ class _JoinRequestStatusScreenState extends ConsumerState<JoinRequestStatusScree
             const Text('This request was cancelled.', textAlign: TextAlign.center),
             const SizedBox(height: 16),
             FilledButton(
-              onPressed: () => Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const DiscoverPgScreen())),
+              onPressed: () => context.go('/discover-pg'),
               child: const Text('Search again'),
             ),
           ],

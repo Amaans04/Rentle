@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/property_models.dart';
 import '../../../core/widgets/async_value_view.dart';
 import '../owner_providers.dart';
+import '../staff/staff_list_screen.dart';
 import 'property_form_screen.dart';
 import 'property_workspace_screen.dart';
 
@@ -19,7 +20,15 @@ class PropertiesListScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Properties'),
-        actions: [const ClerkUserButton(), const SizedBox(width: 12)],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.people_outline),
+            tooltip: 'Staff',
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => StaffListScreen(orgId: orgId))),
+          ),
+          const ClerkUserButton(),
+          const SizedBox(width: 12),
+        ],
       ),
       body: AsyncValueView<List<Property>>(
         value: properties,

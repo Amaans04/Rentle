@@ -84,8 +84,8 @@ class _TenantDetailScreenState extends ConsumerState<TenantDetailScreen> {
                       children: [
                         Chip(
                           label: Text(titleCase(t.status)),
-                          backgroundColor: tenancyStatusColor(t.status).withValues(alpha: 0.15),
-                          labelStyle: TextStyle(color: tenancyStatusColor(t.status)),
+                          backgroundColor: tenancyStatusColor(context, t.status).withValues(alpha: 0.15),
+                          labelStyle: TextStyle(color: tenancyStatusColor(context, t.status)),
                         ),
                       ],
                     ),
@@ -129,7 +129,7 @@ class _TenantDetailScreenState extends ConsumerState<TenantDetailScreen> {
                   ),
                 if (t.status == 'PENDING_ONBOARDING' || t.status == 'ACTIVE' || t.status == 'NOTICE_GIVEN')
                   OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                    style: OutlinedButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
                     onPressed: _busy ? null : () => _confirmMoveOut(context),
                     icon: const Icon(Icons.logout),
                     label: const Text('Move out'),
