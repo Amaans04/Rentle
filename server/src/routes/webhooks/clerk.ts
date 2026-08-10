@@ -162,7 +162,17 @@ async function upsertMembership(data: Record<string, unknown>): Promise<void> {
     prisma.organization.findUnique({ where: { clerkOrgId } }),
     prisma.user.findUnique({ where: { clerkId: clerkUserId } }),
   ]);
-  if (!org || !user) return; // webhook ordering lag — user/org row not created yet, safe to skip
+  // Webhook ordering lag — Clerk fires organization.created and this event
+  // near-simultaneously for a brand-new org, and Svix doesn't guarantee
+  // delivery order across event types, so this one can genuinely arrive
+  // first. MUST throw (not return) here: the route handler has no
+  // try/catch around this call, so throwing surfaces as a 500, which is
+  // what makes Svix actually retry. Returning normally makes the route
+  // reply 200 — Svix counts that as permanently delivered and never
+  // retries, silently dropping the membership forever. This was a real bug
+  // found 2026-08-10: a fresh org's OWNER membership never got created
+  // because this raced organization.created and the event was swallowed.
+  if (!org || !user) throw new Error(`organizationMembership webhook raced org/user creation (org=${clerkOrgId}, user=${clerkUserId}) — retry needed`);
 
   const existing = await prisma.organizationMember.findUnique({
     where: { organizationId_userId: { organizationId: org.id, userId: user.id } },
@@ -196,7 +206,9 @@ async function deactivateMembership(data: Record<string, unknown>): Promise<void
     prisma.organization.findUnique({ where: { clerkOrgId } }),
     prisma.user.findUnique({ where: { clerkId: clerkUserId } }),
   ]);
-  if (!org || !user) return;
+  // Same reasoning as upsertMembership above — throw, don't return, or a
+  // race swallows this event with no retry.
+  if (!org || !user) throw new Error(`organizationMembership.deleted webhook raced org/user lookup (org=${clerkOrgId}, user=${clerkUserId}) — retry needed`);
 
   await prisma.organizationMember.updateMany({
     where: { organizationId: org.id, userId: user.id },
