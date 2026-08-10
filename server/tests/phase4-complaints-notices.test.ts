@@ -121,6 +121,7 @@ describe.skipIf(!hasLiveDb)("Phase 4: complaints + notices", () => {
     await withOrgContext(orgId, (tx) => tx.room.deleteMany({ where: { organizationId: orgId } }));
     await withOrgContext(orgId, (tx) => tx.floor.deleteMany({ where: { organizationId: orgId } }));
     await withOrgContext(orgId, (tx) => tx.building.deleteMany({ where: { organizationId: orgId } }));
+    await prisma.propertyListing.deleteMany({ where: { organizationId: orgId } });
     await withOrgContext(orgId, (tx) => tx.property.deleteMany({ where: { organizationId: orgId } }));
     await prisma.organizationMember.deleteMany({ where: { organizationId: orgId } });
     await prisma.organization.deleteMany({ where: { id: orgId } });

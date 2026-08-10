@@ -60,6 +60,16 @@
 --     invoices, payments, complaints, etc.) keeps full RLS below — this
 --     exception is limited to the two identity/membership tables that sit
 --     structurally "above" any org context.
+--
+-- `property_listings` is a THIRD, narrower exception, added for the public
+-- PG-search feature: it's a deliberately denormalized, public-safe
+-- projection of Property (name/city/state only — see the model comment in
+-- schema.prisma) that prospective tenants with zero org relationship must
+-- be able to read across every org. It has no client-writable path at all
+-- (only properties.ts writes it, server-side, in the same transaction as a
+-- Property create/update) — this is the same reasoning that keeps the
+-- Clerk webhook's writes to organizations/organization_members safe despite
+-- their RLS exception.
 
 -- Tables with organizationId directly.
 DO $$
@@ -75,6 +85,7 @@ BEGIN
     'rooms',
     'beds',
     'tenancies',
+    'join_requests',
     'invoices',
     'payments',
     'complaints',
@@ -110,6 +121,17 @@ CREATE POLICY tenant_isolation ON beds
   USING ("organizationId" = current_setting('app.current_org_id', true));
 
 CREATE POLICY tenant_isolation ON tenancies
+  USING ("organizationId" = current_setting('app.current_org_id', true));
+
+-- A prospective tenant creates this row before they have any membership in
+-- the org, so there's no ambient RLS context yet — same shape of problem as
+-- organizations/organization_members below, but solved differently here:
+-- routes/join-requests.ts explicitly opens a withOrgContext(propertyListing.organizationId, ...)
+-- transaction (organizationId already verified against the public
+-- PropertyListing row, never trusted from the client directly) so the
+-- session var IS set correctly for the insert — this table stays fully
+-- RLS-protected, no exception needed.
+CREATE POLICY tenant_isolation ON join_requests
   USING ("organizationId" = current_setting('app.current_org_id', true));
 
 CREATE POLICY tenant_isolation ON invoices

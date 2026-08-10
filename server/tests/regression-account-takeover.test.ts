@@ -72,6 +72,7 @@ describe.skipIf(!hasLiveDb)("regression: account-takeover by supplying an org/pr
   });
 
   afterAll(async () => {
+    await prisma.propertyListing.deleteMany({ where: { organizationId: orgAId } });
     await withOrgContext(orgAId, (tx) => tx.property.deleteMany({ where: { organizationId: orgAId } }));
     await prisma.organizationMember.deleteMany({ where: { organizationId: orgAId } });
     await prisma.organization.deleteMany({ where: { id: orgAId } });

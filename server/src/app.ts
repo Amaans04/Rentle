@@ -11,6 +11,7 @@ import { roomBedRoutes } from "./routes/rooms-beds.js";
 import { staffRoutes } from "./routes/staff.js";
 import { tenancyRoutes } from "./routes/tenancies.js";
 import { tenantSelfRoutes } from "./routes/tenant.js";
+import { joinRequestRoutes } from "./routes/join-requests.js";
 import { invoiceRoutes } from "./routes/invoices.js";
 import { paymentRoutes } from "./routes/payments.js";
 import { complaintRoutes } from "./routes/complaints.js";
@@ -60,6 +61,7 @@ export function buildApp(): FastifyInstance {
   app.register(staffRoutes);
   app.register(tenancyRoutes);
   app.register(tenantSelfRoutes);
+  app.register(joinRequestRoutes);
   app.register(invoiceRoutes);
   app.register(paymentRoutes);
   app.register(complaintRoutes);

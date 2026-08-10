@@ -70,6 +70,13 @@ enum TenancyStatus {
   BLACKLISTED
 }
 
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 enum InvoiceStatus {
   DRAFT
   SENT
@@ -155,36 +162,38 @@ model User {
 
   memberships        OrganizationMember[]
   tenancies          Tenancy[]
-  complaints         Complaint[]         @relation("ComplaintReporter")
-  assignedComplaints Complaint[]         @relation("ComplaintAssignee")
+  complaints         Complaint[]          @relation("ComplaintReporter")
+  assignedComplaints Complaint[]          @relation("ComplaintAssignee")
   auditLogs          AuditLog[]
+  joinRequests       JoinRequest[]
 
   @@index([phone])
   @@map("users")
 }
 
 model Organization {
-  id               String             @id @default(cuid())
-  clerkOrgId       String             @unique
+  id               String           @id @default(cuid())
+  clerkOrgId       String           @unique
   name             String
-  slug             String             @unique
+  slug             String           @unique
   logoUrl          String?
-  primaryColor     String?            @default("#2563EB")
-  timezone         String             @default("Asia/Kolkata")
-  currency         String             @default("INR")
+  primaryColor     String?          @default("#2563EB")
+  timezone         String           @default("Asia/Kolkata")
+  currency         String           @default("INR")
   gstin            String?
-  subscriptionTier SubscriptionTier   @default(STARTER)
-  settings         Json               @default("{}")
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  subscriptionTier SubscriptionTier @default(STARTER)
+  settings         Json             @default("{}")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
   deletedAt        DateTime?
-  version          Int                @default(1)
+  version          Int              @default(1)
 
   members      OrganizationMember[]
   properties   Property[]
   subscription Subscription?
   featureFlags OrgFeatureFlag[]
   auditLogs    AuditLog[]
+  joinRequests JoinRequest[]
 
   @@index([slug])
   @@map("organizations")
@@ -267,20 +276,52 @@ model Property {
   gracePeriodDays Int          @default(3)
   lateFinePercent Decimal?     @db.Decimal(5, 2)
   settings        Json         @default("{}")
+  // Opt-out switch for the public search-by-name directory (PropertyListing
+  // below) — defaults to visible, since tenant discovery is meant to bring
+  // owners inbound leads, but an owner can turn it off per property.
+  discoverable    Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   deletedAt       DateTime?
   version         Int          @default(1)
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization Organization     @relation(fields: [organizationId], references: [id])
   buildings    Building[]
   tenancies    Tenancy[]
   complaints   Complaint[]
   notices      Notice[]
+  joinRequests JoinRequest[]
+  listing      PropertyListing?
 
   @@unique([organizationId, slug])
   @@index([organizationId, deletedAt])
   @@map("properties")
+}
+
+// Deliberately NOT RLS-protected — same structural exception as
+// organizations/organization_members (see the note in rls.sql): this is a
+// narrow, denormalized PUBLIC projection of a Property, queried by
+// prospective tenants who have no org membership and therefore no RLS
+// session context yet. Only name/city/state are copied here — nothing
+// sensitive (full address, phone, amenities, photos) ever leaves the
+// RLS-protected `properties` table. Kept in sync from properties.ts
+// whenever a Property is created/updated (removed if `discoverable` is
+// turned off or the property is deleted).
+model PropertyListing {
+  id             String   @id @default(cuid())
+  organizationId String
+  propertyId     String   @unique
+  name           String
+  city           String
+  state          String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@index([name])
+  @@index([city])
+  @@map("property_listings")
 }
 
 model Building {
@@ -390,12 +431,13 @@ model Tenancy {
   deletedAt           DateTime?
   version             Int           @default(1)
 
-  property  Property         @relation(fields: [propertyId], references: [id])
-  bed       Bed              @relation(fields: [bedId], references: [id])
-  user      User             @relation(fields: [userId], references: [id])
-  events    TenancyEvent[]
-  documents TenantDocument[]
-  invoices  Invoice[]
+  property    Property         @relation(fields: [propertyId], references: [id])
+  bed         Bed              @relation(fields: [bedId], references: [id])
+  user        User             @relation(fields: [userId], references: [id])
+  events      TenancyEvent[]
+  documents   TenantDocument[]
+  invoices    Invoice[]
+  joinRequest JoinRequest?
 
   @@index([organizationId, propertyId, status])
   @@index([bedId, status])
@@ -416,6 +458,35 @@ model TenancyEvent {
 
   @@index([tenancyId, createdAt])
   @@map("tenancy_events")
+}
+
+// A prospective tenant's request to join a PG found via the public search
+// directory (PropertyListing) — the RLS-protected counterpart to that
+// public table. organizationId/propertyId here are always server-derived
+// from a real PropertyListing lookup before insert (see routes/join-requests.ts),
+// never trusted directly from the client, same discipline as everywhere
+// else org-scoped data gets written.
+model JoinRequest {
+  id             String            @id @default(cuid())
+  organizationId String
+  propertyId     String
+  userId         String
+  status         JoinRequestStatus @default(PENDING)
+  message        String?
+  tenancyId      String?           @unique
+  respondedBy    String?
+  responseNote   String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  property     Property     @relation(fields: [propertyId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  tenancy      Tenancy?     @relation(fields: [tenancyId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([userId])
+  @@map("join_requests")
 }
 
 // Agreements folded in here (type="AGREEMENT" + signature columns) rather
@@ -477,13 +548,13 @@ model Invoice {
 }
 
 model InvoiceLineItem {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   invoiceId   String
   description String
   category    String // rent, electricity, food, laundry, late_fine, deposit
-  quantity    Decimal  @default(1) @db.Decimal(10, 2)
-  unitPrice   Decimal  @db.Decimal(12, 2)
-  amount      Decimal  @db.Decimal(12, 2)
+  quantity    Decimal @default(1) @db.Decimal(10, 2)
+  unitPrice   Decimal @db.Decimal(12, 2)
+  amount      Decimal @db.Decimal(12, 2)
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 

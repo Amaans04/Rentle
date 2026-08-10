@@ -95,6 +95,7 @@ describe.skipIf(!hasLiveDb)("Phase 1: property hierarchy + staff/RBAC", () => {
     await withOrgContext(orgAId, (tx) => tx.room.deleteMany({ where: { organizationId: orgAId } }));
     await withOrgContext(orgAId, (tx) => tx.floor.deleteMany({ where: { organizationId: orgAId } }));
     await withOrgContext(orgAId, (tx) => tx.building.deleteMany({ where: { organizationId: orgAId } }));
+    await prisma.propertyListing.deleteMany({ where: { organizationId: orgAId } });
     await withOrgContext(orgAId, (tx) => tx.property.deleteMany({ where: { organizationId: orgAId } }));
     await prisma.organizationMember.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });

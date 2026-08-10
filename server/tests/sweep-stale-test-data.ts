@@ -19,11 +19,13 @@ export async function sweepStaleTestData(olderThanMs = 60 * 60 * 1000): Promise<
   if (staleOrgIds.length > 0) {
     await prisma.tenantDocument.deleteMany({ where: { tenancy: { organizationId: { in: staleOrgIds } } } });
     await prisma.tenancyEvent.deleteMany({ where: { tenancy: { organizationId: { in: staleOrgIds } } } });
+    await prisma.joinRequest.deleteMany({ where: { organizationId: { in: staleOrgIds } } });
     await prisma.tenancy.deleteMany({ where: { organizationId: { in: staleOrgIds } } });
     await prisma.bed.deleteMany({ where: { organizationId: { in: staleOrgIds } } });
     await prisma.room.deleteMany({ where: { organizationId: { in: staleOrgIds } } });
     await prisma.floor.deleteMany({ where: { organizationId: { in: staleOrgIds } } });
     await prisma.building.deleteMany({ where: { organizationId: { in: staleOrgIds } } });
+    await prisma.propertyListing.deleteMany({ where: { organizationId: { in: staleOrgIds } } });
     await prisma.property.deleteMany({ where: { organizationId: { in: staleOrgIds } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: staleOrgIds } } });
     await prisma.organizationMember.deleteMany({ where: { organizationId: { in: staleOrgIds } } });

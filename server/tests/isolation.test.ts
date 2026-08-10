@@ -57,6 +57,7 @@ describe.skipIf(!hasLiveDb)("cross-org isolation (RLS)", () => {
   });
 
   afterAll(async () => {
+    await prisma.propertyListing.deleteMany({ where: { organizationId: orgBId } });
     await withOrgContext(orgBId, (tx) => tx.property.deleteMany({ where: { organizationId: orgBId } }), prisma);
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
     // Deliberately not calling prisma.$disconnect() — this is the shared

@@ -101,6 +101,7 @@ describe.skipIf(!hasLiveDb)("Phase 2: tenancy lifecycle", () => {
     await withOrgContext(orgAId, (tx) => tx.room.deleteMany({ where: { organizationId: orgAId } }));
     await withOrgContext(orgAId, (tx) => tx.floor.deleteMany({ where: { organizationId: orgAId } }));
     await withOrgContext(orgAId, (tx) => tx.building.deleteMany({ where: { organizationId: orgAId } }));
+    await prisma.propertyListing.deleteMany({ where: { organizationId: orgAId } });
     await withOrgContext(orgAId, (tx) => tx.property.deleteMany({ where: { organizationId: orgAId } }));
     await prisma.organizationMember.deleteMany({ where: { organizationId: orgAId } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });

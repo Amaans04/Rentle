@@ -6,6 +6,7 @@ import { NotFoundError, HttpError } from "../lib/http-errors.js";
 import { addressSchema, parseOrThrow } from "../lib/validation.js";
 import { authenticate, resolveOrg, requirePermission, withRequestOrgContext } from "../auth/pipeline.js";
 import { withAudit } from "../lib/with-audit.js";
+import { syncPropertyListing } from "../services/property-listing.js";
 
 const createPropertySchema = z.object({
   name: z.string().min(1),
@@ -21,6 +22,7 @@ const createPropertySchema = z.object({
   rentDueDay: z.number().int().min(1).max(28).default(5),
   gracePeriodDays: z.number().int().min(0).default(3),
   lateFinePercent: z.number().min(0).max(100).optional(),
+  discoverable: z.boolean().default(true),
 });
 
 const updatePropertySchema = createPropertySchema.partial();
@@ -48,10 +50,13 @@ export async function propertyRoutes(fastify: FastifyInstance): Promise<void> {
         withAudit(
           tx,
           { organizationId: organization.id, userId: member.userId, action: "CREATE", resource: "property" },
-          () =>
-            tx.property.create({
+          async () => {
+            const created = await tx.property.create({
               data: { ...body, organizationId: organization.id },
-            })
+            });
+            await syncPropertyListing(tx, created);
+            return created;
+          }
         )
       );
 
@@ -111,11 +116,14 @@ export async function propertyRoutes(fastify: FastifyInstance): Promise<void> {
         return withAudit(
           tx,
           { organizationId: organization.id, userId: member.userId, action: "UPDATE", resource: `property:${propertyId}` },
-          () =>
-            tx.property.update({
+          async () => {
+            const saved = await tx.property.update({
               where: { id: propertyId },
               data: { ...body, version: { increment: 1 } },
-            })
+            });
+            await syncPropertyListing(tx, saved);
+            return saved;
+          }
         );
       });
 
@@ -139,7 +147,11 @@ export async function propertyRoutes(fastify: FastifyInstance): Promise<void> {
         return withAudit(
           tx,
           { organizationId: organization.id, userId: member.userId, action: "DELETE", resource: `property:${propertyId}` },
-          () => tx.property.update({ where: { id: propertyId }, data: { deletedAt: new Date() } })
+          async () => {
+            const saved = await tx.property.update({ where: { id: propertyId }, data: { deletedAt: new Date() } });
+            await syncPropertyListing(tx, saved);
+            return saved;
+          }
         );
       });
 

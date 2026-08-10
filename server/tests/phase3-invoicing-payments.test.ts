@@ -121,6 +121,7 @@ describe.skipIf(!hasLiveDb)("Phase 3: invoicing + manual payments", () => {
     await withOrgContext(orgId, (tx) => tx.room.deleteMany({ where: { organizationId: orgId } }));
     await withOrgContext(orgId, (tx) => tx.floor.deleteMany({ where: { organizationId: orgId } }));
     await withOrgContext(orgId, (tx) => tx.building.deleteMany({ where: { organizationId: orgId } }));
+    await prisma.propertyListing.deleteMany({ where: { organizationId: orgId } });
     await withOrgContext(orgId, (tx) => tx.property.deleteMany({ where: { organizationId: orgId } }));
     await prisma.organizationMember.deleteMany({ where: { organizationId: orgId } });
     const tenantUsers = await prisma.user.findMany({ where: { clerkId: { startsWith: "test_tenant" } }, select: { id: true } });
