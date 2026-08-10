@@ -1,0 +1,24 @@
+name: Keep server warm
+
+# Render's free tier spins the server down after 15 min idle, and the next
+# request pays a 30-60s cold-start penalty — that's the actual cause of
+# "the app feels slow" reports during real use/testing (2026-08-11), not an
+# app-code performance bug. daily-jobs.yml's once-a-day ping doesn't come
+# close to preventing this. Pings the public, secret-free /health endpoint
+# (liveness only, no DB round trip needed just to keep the Node process
+# alive) every 10 minutes — comfortably inside the 15-min sleep window even
+# accounting for GitHub Actions' own scheduling jitter, which is real but
+# usually well under a couple of minutes.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /health
+        run: curl -sf --max-time 90 "${SERVER_URL}/health"
+        env:
+          SERVER_URL: ${{ secrets.SERVER_URL }}
