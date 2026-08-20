@@ -4,7 +4,11 @@ import '../../../core/format.dart';
 import '../../../core/models/property_models.dart';
 import '../../../core/models/tenancy_models.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_list_card.dart';
 import '../../../core/widgets/async_value_view.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/staggered_entrance.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../owner_providers.dart';
 import 'tenant_detail_screen.dart';
 
@@ -72,39 +76,36 @@ class _TenantsListScreenState extends ConsumerState<TenantsListScreen> {
             onRetry: () => ref.invalidate(tenanciesProvider(key)),
             data: (context, list) {
               if (list.isEmpty) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text('No tenants here yet. Use "Invite tenant" to add one.', textAlign: TextAlign.center),
-                  ),
+                return const EmptyState(
+                  icon: Icons.people_outline,
+                  title: 'No tenants here yet',
+                  subtitle: 'Use "Invite tenant" to add one.',
                 );
               }
               return RefreshIndicator(
                 onRefresh: () => ref.refresh(tenanciesProvider(key).future),
-                child: ListView.separated(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: list.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final tenancy = list[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: tenancyStatusColor(context, tenancy.status),
-                        child: Text(
-                          tenancy.displayName.isNotEmpty ? tenancy.displayName[0].toUpperCase() : '?',
-                          style: const TextStyle(color: Colors.white),
-                        ),
+                    return StaggeredEntrance(
+                      index: index,
+                      child: AppListCard(
+                        leadingIcon: Icons.person,
+                        leadingColor: tenancyStatusColor(context, tenancy.status),
+                        title: tenancy.displayName,
+                        subtitle: 'Bed ${tenancy.bedLabel ?? '—'} · ${formatMoney(tenancy.rentAmount)}/mo',
+                        trailing: StatusBadge(label: titleCase(tenancy.status), color: tenancyStatusColor(context, tenancy.status)),
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => TenantDetailScreen(orgId: widget.orgId, propertyId: widget.property.id, tenancy: tenancy),
+                            ),
+                          );
+                          ref.invalidate(tenanciesProvider(key));
+                        },
                       ),
-                      title: Text(tenancy.displayName),
-                      subtitle: Text('Bed ${tenancy.bedLabel ?? '—'} · ${titleCase(tenancy.status)} · ${formatMoney(tenancy.rentAmount)}/mo'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => TenantDetailScreen(orgId: widget.orgId, propertyId: widget.property.id, tenancy: tenancy),
-                          ),
-                        );
-                        ref.invalidate(tenanciesProvider(key));
-                      },
                     );
                   },
                 ),

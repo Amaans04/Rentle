@@ -5,7 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../../core/models/discovery_models.dart';
 import '../../core/providers/api_providers.dart';
 import '../../core/tenant_prefs.dart';
+import '../../core/widgets/app_bottom_sheet.dart';
+import '../../core/widgets/app_list_card.dart';
 import '../../core/widgets/async_value_view.dart';
+import '../../core/widgets/empty_state.dart';
+import '../../core/widgets/staggered_entrance.dart';
 import 'tenant_providers.dart';
 
 /// The smaller alternative to full "browse nearby PGs" discovery: typed
@@ -40,9 +44,9 @@ class _DiscoverPgScreenState extends ConsumerState<DiscoverPgScreen> {
   }
 
   Future<void> _requestToJoin(PropertyListing listing) async {
-    final message = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
+    final message = await AppBottomSheet.show<String>(
+      context,
+      title: 'Request to join ${listing.name}',
       builder: (_) => _JoinRequestSheet(listing: listing),
     );
     if (message == null || !mounted) return; // sheet dismissed without submitting
@@ -97,24 +101,25 @@ class _DiscoverPgScreenState extends ConsumerState<DiscoverPgScreen> {
                     onRetry: () => ref.invalidate(propertySearchProvider(_query)),
                     data: (context, listings) {
                       if (listings.isEmpty) {
-                        return const Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Text(
-                            "No PGs found with that name. Double-check the spelling, or ask the owner for an invite code instead.",
-                            textAlign: TextAlign.center,
-                          ),
+                        return const EmptyState(
+                          icon: Icons.search_off,
+                          title: 'No PGs found',
+                          subtitle: 'Double-check the spelling, or ask the owner for an invite code instead.',
                         );
                       }
-                      return ListView.separated(
+                      return ListView.builder(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
                         itemCount: listings.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
                         itemBuilder: (context, index) {
                           final listing = listings[index];
-                          return ListTile(
-                            leading: const CircleAvatar(child: Icon(Icons.apartment)),
-                            title: Text(listing.name),
-                            subtitle: Text('${listing.city}, ${listing.state}'),
-                            trailing: FilledButton(onPressed: () => _requestToJoin(listing), child: const Text('Request')),
+                          return StaggeredEntrance(
+                            index: index,
+                            child: AppListCard(
+                              leadingIcon: Icons.apartment,
+                              title: listing.name,
+                              subtitle: '${listing.city}, ${listing.state}',
+                              trailing: FilledButton(onPressed: () => _requestToJoin(listing), child: const Text('Request')),
+                            ),
                           );
                         },
                       );
@@ -147,32 +152,27 @@ class _JoinRequestSheetState extends State<_JoinRequestSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(left: 24, right: 24, top: 24, bottom: 24 + MediaQuery.of(context).viewInsets.bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('Request to join ${widget.listing.name}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          const Text('The owner will review your request and pick a bed for you.', style: TextStyle(color: Colors.grey)),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _message,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Message (optional)',
-              hintText: 'e.g. Looking for a single, move-in this month',
-            ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text('The owner will review your request and pick a bed for you.', style: TextStyle(color: Colors.grey)),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _message,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: 'Message (optional)',
+            hintText: 'e.g. Looking for a single, move-in this month',
           ),
-          const SizedBox(height: 20),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(_message.text),
-            child: const Text('Send request'),
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 20),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_message.text),
+          child: const Text('Send request'),
+        ),
+      ],
     );
   }
 }

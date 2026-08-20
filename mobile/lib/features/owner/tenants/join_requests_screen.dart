@@ -5,7 +5,11 @@ import '../../../core/models/discovery_models.dart';
 import '../../../core/models/property_models.dart';
 import '../../../core/providers/api_providers.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
+import '../../../core/widgets/app_list_card.dart';
 import '../../../core/widgets/async_value_view.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/staggered_entrance.dart';
 import '../owner_providers.dart';
 
 /// Requests from prospective tenants who found this property via the public
@@ -29,45 +33,40 @@ class JoinRequestsScreen extends ConsumerWidget {
       data: (context, all) {
         final list = all.where((r) => r.propertyId == property.id).toList();
         if (list.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Text(
-                'No pending requests. Prospective tenants who find this PG via search will show up here.',
-                textAlign: TextAlign.center,
-              ),
-            ),
+          return const EmptyState(
+            icon: Icons.person_add_alt,
+            title: 'No pending requests',
+            subtitle: 'Prospective tenants who find this PG via search will show up here.',
           );
         }
         return RefreshIndicator(
           onRefresh: () => ref.refresh(joinRequestsProvider(key).future),
-          child: ListView.separated(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: list.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, index) {
               final request = list[index];
-              return ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.person_add_alt)),
-                title: Text(request.requesterDisplayName),
-                subtitle: Text(
-                  request.message?.isNotEmpty == true ? request.message! : 'Requested ${formatDate(request.createdAt)}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.close, color: Theme.of(context).colorScheme.error),
-                      tooltip: 'Reject',
-                      onPressed: () => _reject(context, ref, request, key),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.check_circle, color: context.semanticColors.success),
-                      tooltip: 'Approve',
-                      onPressed: () => _approve(context, ref, request, key),
-                    ),
-                  ],
+              return StaggeredEntrance(
+                index: index,
+                child: AppListCard(
+                  leadingIcon: Icons.person_add_alt,
+                  title: request.requesterDisplayName,
+                  subtitle: request.message?.isNotEmpty == true ? request.message! : 'Requested ${formatDate(request.createdAt)}',
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.close, color: Theme.of(context).colorScheme.error),
+                        tooltip: 'Reject',
+                        onPressed: () => _reject(context, ref, request, key),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.check_circle, color: context.semanticColors.success),
+                        tooltip: 'Approve',
+                        onPressed: () => _approve(context, ref, request, key),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -115,21 +114,24 @@ class JoinRequestsScreen extends ConsumerWidget {
   }
 
   Future<void> _approve(BuildContext context, WidgetRef ref, JoinRequest request, JoinRequestsKey key) async {
-    final approved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _ApproveJoinRequestSheet(orgId: orgId, property: property, request: request),
-    );
+    final saving = ValueNotifier(false);
+    final approved = await AppBottomSheet.show<bool>(
+      context,
+      title: 'Approve ${request.requesterDisplayName}',
+      saving: saving,
+      builder: (_) => _ApproveJoinRequestSheet(orgId: orgId, property: property, request: request, saving: saving),
+    ).whenComplete(saving.dispose);
     if (approved == true) ref.invalidate(joinRequestsProvider(key));
   }
 }
 
 class _ApproveJoinRequestSheet extends ConsumerStatefulWidget {
-  const _ApproveJoinRequestSheet({required this.orgId, required this.property, required this.request});
+  const _ApproveJoinRequestSheet({required this.orgId, required this.property, required this.request, required this.saving});
 
   final String orgId;
   final Property property;
   final JoinRequest request;
+  final ValueNotifier<bool> saving;
 
   @override
   ConsumerState<_ApproveJoinRequestSheet> createState() => _ApproveJoinRequestSheetState();
@@ -140,7 +142,13 @@ class _ApproveJoinRequestSheetState extends ConsumerState<_ApproveJoinRequestShe
   Bed? _selectedBed;
   final _rentAmount = TextEditingController();
   final _depositAmount = TextEditingController(text: '0');
-  bool _saving = false;
+
+  @override
+  void dispose() {
+    _rentAmount.dispose();
+    _depositAmount.dispose();
+    super.dispose();
+  }
 
   Future<void> _approve() async {
     if (_selectedBed == null) {
@@ -148,7 +156,7 @@ class _ApproveJoinRequestSheetState extends ConsumerState<_ApproveJoinRequestShe
       return;
     }
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _saving = true);
+    widget.saving.value = true;
     try {
       final api = ref.read(apiClientProvider);
       await api.dio.patch(
@@ -163,7 +171,7 @@ class _ApproveJoinRequestSheetState extends ConsumerState<_ApproveJoinRequestShe
     } catch (e) {
       if (mounted) showErrorSnackBar(context, e);
     } finally {
-      if (mounted) setState(() => _saving = false);
+      widget.saving.value = false;
     }
   }
 
@@ -172,62 +180,58 @@ class _ApproveJoinRequestSheetState extends ConsumerState<_ApproveJoinRequestShe
     final key = (orgId: widget.orgId, propertyId: widget.property.id);
     final vacantBeds = ref.watch(vacantBedsProvider(key));
 
-    return Padding(
-      padding: EdgeInsets.only(left: 24, right: 24, top: 24, bottom: 24 + MediaQuery.of(context).viewInsets.bottom),
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Approve ${widget.request.requesterDisplayName}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              const Text('Pick a bed and confirm rent — this creates their tenancy right away.', style: TextStyle(color: Colors.grey)),
-              const SizedBox(height: 16),
-              AsyncValueView<List<Bed>>(
-                value: vacantBeds,
-                data: (context, beds) {
-                  if (beds.isEmpty) {
-                    return const Text('No vacant beds in this property right now.');
-                  }
-                  return DropdownButtonFormField<Bed>(
-                    initialValue: _selectedBed,
-                    decoration: const InputDecoration(labelText: 'Vacant bed'),
-                    items: beds.map((b) => DropdownMenuItem(value: b, child: Text('Bed ${b.bedLabel}'))).toList(),
-                    onChanged: (b) {
-                      setState(() {
-                        _selectedBed = b;
-                        if (b?.rentAmount != null) _rentAmount.text = b!.rentAmount!.toStringAsFixed(0);
-                      });
-                    },
-                  );
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Pick a bed and confirm rent — this creates their tenancy right away.', style: TextStyle(color: Colors.grey)),
+          const SizedBox(height: 16),
+          AsyncValueView<List<Bed>>(
+            value: vacantBeds,
+            data: (context, beds) {
+              if (beds.isEmpty) {
+                return const Text('No vacant beds in this property right now.');
+              }
+              return DropdownButtonFormField<Bed>(
+                initialValue: _selectedBed,
+                decoration: const InputDecoration(labelText: 'Vacant bed'),
+                items: beds.map((b) => DropdownMenuItem(value: b, child: Text('Bed ${b.bedLabel}'))).toList(),
+                onChanged: (b) {
+                  setState(() {
+                    _selectedBed = b;
+                    if (b?.rentAmount != null) _rentAmount.text = b!.rentAmount!.toStringAsFixed(0);
+                  });
                 },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _rentAmount,
-                decoration: const InputDecoration(labelText: 'Rent amount (₹/month)'),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                validator: (v) => double.tryParse(v ?? '') == null ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _depositAmount,
-                decoration: const InputDecoration(labelText: 'Deposit amount (₹)'),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                validator: (v) => double.tryParse(v ?? '') == null ? 'Required' : null,
-              ),
-              const SizedBox(height: 20),
-              FilledButton(
-                onPressed: _saving ? null : _approve,
-                child: _saving
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Approve'),
-              ),
-            ],
+              );
+            },
           ),
-        ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _rentAmount,
+            decoration: const InputDecoration(labelText: 'Rent amount (₹/month)'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            validator: (v) => double.tryParse(v ?? '') == null ? 'Required' : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _depositAmount,
+            decoration: const InputDecoration(labelText: 'Deposit amount (₹)'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            validator: (v) => double.tryParse(v ?? '') == null ? 'Required' : null,
+          ),
+          const SizedBox(height: 20),
+          ValueListenableBuilder<bool>(
+            valueListenable: widget.saving,
+            builder: (context, saving, _) => FilledButton(
+              onPressed: saving ? null : _approve,
+              child: saving
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Approve'),
+            ),
+          ),
+        ],
       ),
     );
   }

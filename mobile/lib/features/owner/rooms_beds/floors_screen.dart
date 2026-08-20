@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/property_models.dart';
 import '../../../core/providers/api_providers.dart';
+import '../../../core/widgets/app_list_card.dart';
 import '../../../core/widgets/async_value_view.dart';
 import '../../../core/widgets/confirm_delete.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/staggered_entrance.dart';
 import '../owner_providers.dart';
 import 'floor_form_sheet.dart';
 import 'rooms_screen.dart';
@@ -16,11 +19,7 @@ class FloorsScreen extends ConsumerWidget {
   final Building building;
 
   Future<void> _edit(BuildContext context, WidgetRef ref, BuildingKey key, Floor floor) async {
-    final edited = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => FloorFormSheet(orgId: orgId, existing: floor),
-    );
+    final edited = await FloorFormSheet.show(context, orgId: orgId, existing: floor);
     if (edited == true) ref.invalidate(floorsProvider(key));
   }
 
@@ -52,34 +51,31 @@ class FloorsScreen extends ConsumerWidget {
         onRetry: () => ref.invalidate(floorsProvider(key)),
         data: (context, list) {
           if (list.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('No floors yet. Add one to start adding rooms.', textAlign: TextAlign.center),
-              ),
-            );
+            return const EmptyState(icon: Icons.layers, title: 'No floors yet', subtitle: 'Add one to start adding rooms.');
           }
           return RefreshIndicator(
             onRefresh: () => ref.refresh(floorsProvider(key).future),
-            child: ListView.separated(
+            child: ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: list.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final floor = list[index];
-                return ListTile(
-                  leading: const Icon(Icons.layers),
-                  title: Text(floor.name),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (value) => value == 'edit' ? _edit(context, ref, key, floor) : _delete(context, ref, key, floor),
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      PopupMenuItem(value: 'delete', child: Text('Delete')),
-                    ],
-                  ),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => RoomsScreen(orgId: orgId, property: property, building: building, floor: floor),
+                return StaggeredEntrance(
+                  index: index,
+                  child: AppListCard(
+                    leadingIcon: Icons.layers,
+                    title: floor.name,
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (value) => value == 'edit' ? _edit(context, ref, key, floor) : _delete(context, ref, key, floor),
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(value: 'edit', child: Text('Edit')),
+                        PopupMenuItem(value: 'delete', child: Text('Delete')),
+                      ],
+                    ),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => RoomsScreen(orgId: orgId, property: property, building: building, floor: floor),
+                      ),
                     ),
                   ),
                 );
@@ -90,11 +86,7 @@ class FloorsScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          final created = await showModalBottomSheet<bool>(
-            context: context,
-            isScrollControlled: true,
-            builder: (_) => FloorFormSheet(orgId: orgId, buildingId: building.id),
-          );
+          final created = await FloorFormSheet.show(context, orgId: orgId, buildingId: building.id);
           if (created == true) ref.invalidate(floorsProvider(key));
         },
         icon: const Icon(Icons.add),

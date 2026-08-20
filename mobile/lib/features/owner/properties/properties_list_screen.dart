@@ -2,7 +2,10 @@ import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/property_models.dart';
+import '../../../core/widgets/app_list_card.dart';
 import '../../../core/widgets/async_value_view.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/staggered_entrance.dart';
 import '../owner_providers.dart';
 import '../staff/staff_list_screen.dart';
 import 'property_form_screen.dart';
@@ -18,63 +21,60 @@ class PropertiesListScreen extends ConsumerWidget {
     final properties = ref.watch(propertiesProvider(orgId));
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Properties'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.people_outline),
-            tooltip: 'Staff',
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => StaffListScreen(orgId: orgId))),
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) => [
+          SliverAppBar.large(
+            title: const Text('Properties'),
+            pinned: true,
+            forceElevated: innerBoxIsScrolled,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.people_outline),
+                tooltip: 'Staff',
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => StaffListScreen(orgId: orgId))),
+              ),
+              const ClerkUserButton(),
+              const SizedBox(width: 12),
+            ],
           ),
-          const ClerkUserButton(),
-          const SizedBox(width: 12),
         ],
-      ),
-      body: AsyncValueView<List<Property>>(
-        value: properties,
-        onRetry: () => ref.invalidate(propertiesProvider(orgId)),
-        data: (context, list) {
-          if (list.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.apartment, size: 48, color: Colors.grey),
-                    const SizedBox(height: 12),
-                    const Text('No properties yet.', style: TextStyle(fontSize: 16)),
-                    const SizedBox(height: 4),
-                    const Text('Add your first PG property to get started.', textAlign: TextAlign.center),
-                  ],
-                ),
+        body: AsyncValueView<List<Property>>(
+          value: properties,
+          onRetry: () => ref.invalidate(propertiesProvider(orgId)),
+          data: (context, list) {
+            if (list.isEmpty) {
+              return const EmptyState(
+                icon: Icons.apartment,
+                title: 'No properties yet',
+                subtitle: 'Add your first PG property to get started.',
+              );
+            }
+            return RefreshIndicator(
+              onRefresh: () => ref.refresh(propertiesProvider(orgId).future),
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: list.length,
+                itemBuilder: (context, index) {
+                  final property = list[index];
+                  return StaggeredEntrance(
+                    index: index,
+                    child: AppListCard(
+                      leadingIcon: Icons.apartment,
+                      title: property.name,
+                      subtitle: property.address.oneLine,
+                      onTap: () async {
+                        await Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => PropertyWorkspaceScreen(orgId: orgId, property: property)));
+                        ref.invalidate(propertiesProvider(orgId));
+                      },
+                    ),
+                  );
+                },
               ),
             );
-          }
-          return RefreshIndicator(
-            onRefresh: () => ref.refresh(propertiesProvider(orgId).future),
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: list.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final property = list[index];
-                return ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.apartment)),
-                  title: Text(property.name),
-                  subtitle: Text(property.address.oneLine, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () async {
-                    await Navigator.of(
-                      context,
-                    ).push(MaterialPageRoute(builder: (_) => PropertyWorkspaceScreen(orgId: orgId, property: property)));
-                    ref.invalidate(propertiesProvider(orgId));
-                  },
-                );
-              },
-            ),
-          );
-        },
+          },
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {

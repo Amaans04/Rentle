@@ -4,7 +4,10 @@ import '../../../core/format.dart';
 import '../../../core/models/user_models.dart';
 import '../../../core/permissions.dart';
 import '../../../core/providers/api_providers.dart';
+import '../../../core/widgets/app_list_card.dart';
 import '../../../core/widgets/async_value_view.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/staggered_entrance.dart';
 import '../owner_providers.dart';
 import 'staff_detail_screen.dart';
 import 'staff_invite_screen.dart';
@@ -27,40 +30,37 @@ class StaffListScreen extends ConsumerWidget {
         onRetry: () => ref.invalidate(fullOrgMembersProvider(orgId)),
         data: (context, list) {
           if (list.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('No staff yet. Invite a manager or receptionist to help run this PG.', textAlign: TextAlign.center),
-              ),
+            return const EmptyState(
+              icon: Icons.badge_outlined,
+              title: 'No staff yet',
+              subtitle: 'Invite a manager or receptionist to help run this PG.',
             );
           }
           return RefreshIndicator(
             onRefresh: () => ref.refresh(fullOrgMembersProvider(orgId).future),
-            child: ListView.separated(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: list.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final member = list[index];
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: member.isActive
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.surfaceContainerHigh,
-                    child: Text(member.displayName[0].toUpperCase()),
+                final scheme = Theme.of(context).colorScheme;
+                return StaggeredEntrance(
+                  index: index,
+                  child: AppListCard(
+                    leadingIcon: Icons.person,
+                    leadingColor: member.isActive ? scheme.primary : scheme.outline,
+                    title: member.displayName,
+                    subtitle:
+                        '${titleCase(member.role)}'
+                        '${member.isUnrestricted ? " · All properties" : " · ${member.propertyIds.length} propert${member.propertyIds.length == 1 ? 'y' : 'ies'}"}'
+                        '${member.isActive ? '' : ' · Inactive'}',
+                    onTap: () async {
+                      await Navigator.of(
+                        context,
+                      ).push(MaterialPageRoute(builder: (_) => StaffDetailScreen(orgId: orgId, member: member)));
+                      ref.invalidate(fullOrgMembersProvider(orgId));
+                    },
                   ),
-                  title: Text(member.displayName),
-                  subtitle: Text(
-                    '${titleCase(member.role)}'
-                    '${member.isUnrestricted ? " · All properties" : " · ${member.propertyIds.length} propert${member.propertyIds.length == 1 ? 'y' : 'ies'}"}'
-                    '${member.isActive ? '' : ' · Inactive'}',
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () async {
-                    await Navigator.of(
-                      context,
-                    ).push(MaterialPageRoute(builder: (_) => StaffDetailScreen(orgId: orgId, member: member)));
-                    ref.invalidate(fullOrgMembersProvider(orgId));
-                  },
                 );
               },
             ),

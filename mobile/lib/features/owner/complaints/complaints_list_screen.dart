@@ -4,7 +4,11 @@ import '../../../core/format.dart';
 import '../../../core/models/complaint_models.dart';
 import '../../../core/models/property_models.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_list_card.dart';
 import '../../../core/widgets/async_value_view.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/staggered_entrance.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../owner_providers.dart';
 import 'complaint_detail_screen.dart';
 
@@ -89,39 +93,34 @@ class _ComplaintsListScreenState extends ConsumerState<ComplaintsListScreen> {
             onRetry: () => ref.invalidate(complaintsProvider(key)),
             data: (context, list) {
               if (list.isEmpty) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text('No complaints here. Tenants file these from their own app.', textAlign: TextAlign.center),
-                  ),
+                return const EmptyState(
+                  icon: Icons.report_problem_outlined,
+                  title: 'No complaints here',
+                  subtitle: 'Tenants file these from their own app.',
                 );
               }
               return RefreshIndicator(
                 onRefresh: () => ref.refresh(complaintsProvider(key).future),
-                child: ListView.separated(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: list.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final c = list[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: complaintStatusColor(context, c.status),
-                        child: const Icon(Icons.report_problem, color: Colors.white, size: 18),
+                    return StaggeredEntrance(
+                      index: index,
+                      child: AppListCard(
+                        leadingIcon: Icons.report_problem,
+                        leadingColor: complaintStatusColor(context, c.status),
+                        title: c.title,
+                        subtitle: '${c.reporterName ?? 'Tenant'} · ${titleCase(c.status)}',
+                        trailing: StatusBadge(label: c.priority, color: priorityColor(context, c.priority)),
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => ComplaintDetailScreen(orgId: widget.orgId, complaintId: c.id)),
+                          );
+                          ref.invalidate(complaintsProvider(key));
+                        },
                       ),
-                      title: Text(c.title),
-                      subtitle: Text('${c.reporterName ?? 'Tenant'} · ${titleCase(c.status)}'),
-                      trailing: Chip(
-                        label: Text(c.priority, style: const TextStyle(fontSize: 11)),
-                        backgroundColor: priorityColor(context, c.priority).withValues(alpha: 0.15),
-                        labelStyle: TextStyle(color: priorityColor(context, c.priority)),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => ComplaintDetailScreen(orgId: widget.orgId, complaintId: c.id)),
-                        );
-                        ref.invalidate(complaintsProvider(key));
-                      },
                     );
                   },
                 ),

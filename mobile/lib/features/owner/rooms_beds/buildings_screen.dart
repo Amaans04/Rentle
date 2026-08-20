@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/property_models.dart';
 import '../../../core/providers/api_providers.dart';
+import '../../../core/widgets/app_list_card.dart';
 import '../../../core/widgets/async_value_view.dart';
 import '../../../core/widgets/confirm_delete.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/staggered_entrance.dart';
 import '../owner_providers.dart';
 import 'building_form_sheet.dart';
 import 'floors_screen.dart';
@@ -18,11 +21,7 @@ class BuildingsScreen extends ConsumerWidget {
   final Property property;
 
   Future<void> _edit(BuildContext context, WidgetRef ref, PropertyKey key, Building building) async {
-    final edited = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => BuildingFormSheet(orgId: orgId, existing: building),
-    );
+    final edited = await BuildingFormSheet.show(context, orgId: orgId, existing: building);
     if (edited == true) ref.invalidate(buildingsProvider(key));
   }
 
@@ -52,33 +51,34 @@ class BuildingsScreen extends ConsumerWidget {
       onRetry: () => ref.invalidate(buildingsProvider(key)),
       data: (context, list) {
         if (list.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Text('No buildings yet. Add one to start adding floors, rooms, and beds.', textAlign: TextAlign.center),
-            ),
+          return const EmptyState(
+            icon: Icons.domain,
+            title: 'No buildings yet',
+            subtitle: 'Add one to start adding floors, rooms, and beds.',
           );
         }
         return RefreshIndicator(
           onRefresh: () => ref.refresh(buildingsProvider(key).future),
-          child: ListView.separated(
+          child: ListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: list.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, index) {
               final building = list[index];
-              return ListTile(
-                leading: const Icon(Icons.domain),
-                title: Text(building.name),
-                trailing: PopupMenuButton<String>(
-                  onSelected: (value) => value == 'edit' ? _edit(context, ref, key, building) : _delete(context, ref, key, building),
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    PopupMenuItem(value: 'delete', child: Text('Delete')),
-                  ],
-                ),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => FloorsScreen(orgId: orgId, property: property, building: building)),
+              return StaggeredEntrance(
+                index: index,
+                child: AppListCard(
+                  leadingIcon: Icons.domain,
+                  title: building.name,
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (value) => value == 'edit' ? _edit(context, ref, key, building) : _delete(context, ref, key, building),
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(value: 'edit', child: Text('Edit')),
+                      PopupMenuItem(value: 'delete', child: Text('Delete')),
+                    ],
+                  ),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => FloorsScreen(orgId: orgId, property: property, building: building)),
+                  ),
                 ),
               );
             },

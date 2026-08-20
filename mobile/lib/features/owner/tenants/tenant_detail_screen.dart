@@ -7,6 +7,7 @@ import '../../../core/models/tenancy_models.dart';
 import '../../../core/providers/api_providers.dart';
 import '../../../core/widgets/async_value_view.dart';
 import '../../../core/widgets/documents_section.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../owner_providers.dart';
 import 'tenants_list_screen.dart' show tenancyStatusColor;
 
@@ -81,13 +82,7 @@ class _TenantDetailScreenState extends ConsumerState<TenantDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      children: [
-                        Chip(
-                          label: Text(titleCase(t.status)),
-                          backgroundColor: tenancyStatusColor(context, t.status).withValues(alpha: 0.15),
-                          labelStyle: TextStyle(color: tenancyStatusColor(context, t.status)),
-                        ),
-                      ],
+                      children: [StatusBadge(label: titleCase(t.status), color: tenancyStatusColor(context, t.status))],
                     ),
                     const SizedBox(height: 12),
                     _row('Bed', t.bedLabel ?? '—'),

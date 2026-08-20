@@ -4,7 +4,11 @@ import '../../../core/format.dart';
 import '../../../core/models/invoice_models.dart';
 import '../../../core/models/property_models.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_list_card.dart';
 import '../../../core/widgets/async_value_view.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/staggered_entrance.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../owner_providers.dart';
 import 'invoice_detail_screen.dart';
 
@@ -73,34 +77,45 @@ class _InvoicesListScreenState extends ConsumerState<InvoicesListScreen> {
             onRetry: () => ref.invalidate(invoicesProvider(key)),
             data: (context, list) {
               if (list.isEmpty) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text('No invoices yet. Use "Generate invoices" to create this month\'s.', textAlign: TextAlign.center),
-                  ),
+                return const EmptyState(
+                  icon: Icons.receipt_long,
+                  title: 'No invoices yet',
+                  subtitle: 'Use "Generate invoices" to create this month\'s.',
                 );
               }
               return RefreshIndicator(
                 onRefresh: () => ref.refresh(invoicesProvider(key).future),
-                child: ListView.separated(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: list.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final invoice = list[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: invoiceStatusColor(context, invoice.status),
-                        child: const Icon(Icons.receipt, color: Colors.white, size: 18),
+                    return StaggeredEntrance(
+                      index: index,
+                      child: AppListCard(
+                        leadingIcon: Icons.receipt,
+                        leadingColor: invoiceStatusColor(context, invoice.status),
+                        title: invoice.invoiceNumber,
+                        subtitle: 'Due ${formatDate(invoice.dueDate)}',
+                        trailing: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              formatMoney(invoice.balance > 0 ? invoice.balance : invoice.totalAmount),
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 4),
+                            StatusBadge(label: titleCase(invoice.status), color: invoiceStatusColor(context, invoice.status)),
+                          ],
+                        ),
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => InvoiceDetailScreen(orgId: widget.orgId, invoice: invoice)),
+                          );
+                          ref.invalidate(invoicesProvider(key));
+                        },
                       ),
-                      title: Text(invoice.invoiceNumber),
-                      subtitle: Text('Due ${formatDate(invoice.dueDate)} · ${titleCase(invoice.status)}'),
-                      trailing: Text(formatMoney(invoice.balance > 0 ? invoice.balance : invoice.totalAmount)),
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => InvoiceDetailScreen(orgId: widget.orgId, invoice: invoice)),
-                        );
-                        ref.invalidate(invoicesProvider(key));
-                      },
                     );
                   },
                 ),

@@ -1,3 +1,4 @@
+import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +6,8 @@ import '../../core/api/api_exception.dart';
 import '../../core/providers/api_providers.dart';
 import '../../core/models/user_models.dart';
 import '../../core/tenant_prefs.dart';
+import '../../core/widgets/app_list_card.dart';
+import '../../core/widgets/staggered_entrance.dart';
 
 /// First thing shown after Clerk sign-in. Calls GET /me and routes based on
 /// what comes back: staff (memberships present) go straight into the owner
@@ -23,11 +26,36 @@ class _IdentityGateState extends ConsumerState<IdentityGate> {
   bool _loading = true;
   String? _error;
   List<Membership> _pickableMemberships = const [];
+  ProviderSubscription<ClerkAuthState?>? _authStateSubscription;
 
   @override
   void initState() {
     super.initState();
-    _resolve();
+    if (ref.read(clerkAuthStateHolderProvider) != null) {
+      _resolve();
+    } else {
+      // AuthGate's hand-off (core/app_router.dart's _EstablishAuthState)
+      // defers setting clerkAuthStateHolderProvider to a microtask to avoid
+      // a real crash (modifying a provider mid-build — found 2026-08-12 on
+      // a device with an already-restored Clerk session), so it may not
+      // have landed yet the instant this widget mounts. Wait for it instead
+      // of assuming it's already there — that assumption was the exact
+      // "apiClientProvider read before sign-in was established" bug this
+      // hand-off exists to prevent.
+      _authStateSubscription = ref.listenManual<ClerkAuthState?>(clerkAuthStateHolderProvider, (previous, next) {
+        if (next != null) {
+          _authStateSubscription?.close();
+          _authStateSubscription = null;
+          _resolve();
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _authStateSubscription?.close();
+    super.dispose();
   }
 
   Future<void> _resolve() async {
@@ -112,16 +140,19 @@ class _IdentityGateState extends ConsumerState<IdentityGate> {
     // More than one membership — let them pick which org to manage.
     return Scaffold(
       appBar: AppBar(title: const Text('Choose an organization')),
-      body: ListView.separated(
+      body: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: _pickableMemberships.length,
-        separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (context, index) {
           final m = _pickableMemberships[index];
-          return ListTile(
-            title: Text(m.organizationName),
-            subtitle: Text(m.role),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _goToOrg(m.organizationId),
+          return StaggeredEntrance(
+            index: index,
+            child: AppListCard(
+              leadingIcon: Icons.apartment,
+              title: m.organizationName,
+              subtitle: m.role,
+              onTap: () => _goToOrg(m.organizationId),
+            ),
           );
         },
       ),

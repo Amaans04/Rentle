@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// "Blue Vivid + Cool Grey" from the color-palette skill — chosen because it
 /// extends the brand blue already in use (Organization.primaryColor default
@@ -153,7 +154,12 @@ ThemeData buildAppTheme() {
     outlineVariant: _Palette.grey200,
   );
 
-  final textTheme = Typography.blackMountainView.apply(bodyColor: _Palette.grey900, displayColor: _Palette.grey900);
+  // Plus Jakarta Sans — a distinctive geometric-humanist sans replacing the
+  // Material default (Roboto via Typography.blackMountainView), chosen for
+  // strong numeral legibility (rent amounts, dates, room counts everywhere
+  // in this app) and because it reads as native-app-quality rather than
+  // "unstyled Material default".
+  final textTheme = GoogleFonts.plusJakartaSansTextTheme().apply(bodyColor: _Palette.grey900, displayColor: _Palette.grey900);
 
   return ThemeData(
     useMaterial3: true,
@@ -161,13 +167,13 @@ ThemeData buildAppTheme() {
     scaffoldBackgroundColor: Colors.white,
     textTheme: textTheme,
     extensions: const [AppSemanticColors.light],
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       backgroundColor: Colors.white,
       foregroundColor: _Palette.grey900,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 1,
-      titleTextStyle: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: _Palette.grey900),
+      titleTextStyle: GoogleFonts.plusJakartaSans(fontSize: 20, fontWeight: FontWeight.w600, color: _Palette.grey900),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
@@ -191,10 +197,11 @@ ThemeData buildAppTheme() {
       style: TextButton.styleFrom(foregroundColor: _Palette.blue600, textStyle: const TextStyle(fontWeight: FontWeight.w600)),
     ),
     cardTheme: CardThemeData(
-      elevation: 0,
+      elevation: 3,
       color: Colors.white,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: _Palette.grey200)),
+      shadowColor: _Palette.grey900.withValues(alpha: 0.08),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       margin: EdgeInsets.zero,
     ),
     chipTheme: ChipThemeData(
@@ -227,5 +234,16 @@ ThemeData buildAppTheme() {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ),
     progressIndicatorTheme: const ProgressIndicatorThemeData(color: _Palette.blue600),
+    // Rounded-top + grabber matches AppBottomSheet's own chrome (see
+    // core/widgets/app_bottom_sheet.dart) so any bottom sheet — including
+    // ones that bypass the wrapper — still reads as HIG-style, not the flat
+    // Material default.
+    bottomSheetTheme: const BottomSheetThemeData(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      modalBackgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      showDragHandle: false,
+    ),
   );
 }

@@ -91,11 +91,7 @@ class _PropertyWorkspaceScreenState extends ConsumerState<PropertyWorkspaceScree
   Future<void> _onFabPressed() async {
     switch (_tabController.index) {
       case 0:
-        final created = await showModalBottomSheet<bool>(
-          context: context,
-          isScrollControlled: true,
-          builder: (_) => BuildingFormSheet(orgId: widget.orgId, propertyId: _property.id),
-        );
+        final created = await BuildingFormSheet.show(context, orgId: widget.orgId, propertyId: _property.id);
         if (created == true) ref.invalidate(buildingsProvider(_key));
         break;
       case 1:
@@ -107,20 +103,13 @@ class _PropertyWorkspaceScreenState extends ConsumerState<PropertyWorkspaceScree
         }
         break;
       case 2:
-        final generated = await showModalBottomSheet<bool>(
-          context: context,
-          builder: (_) => GenerateInvoicesSheet(orgId: widget.orgId, propertyId: _property.id),
-        );
+        final generated = await GenerateInvoicesSheet.show(context, orgId: widget.orgId, propertyId: _property.id);
         if (generated == true) {
           ref.invalidate(invoicesProvider((orgId: widget.orgId, propertyId: _property.id, status: null)));
         }
         break;
       case 5:
-        final posted = await showModalBottomSheet<bool>(
-          context: context,
-          isScrollControlled: true,
-          builder: (_) => NoticeFormSheet(orgId: widget.orgId, propertyId: _property.id),
-        );
+        final posted = await NoticeFormSheet.show(context, orgId: widget.orgId, propertyId: _property.id);
         if (posted == true) ref.invalidate(noticesProvider(_key));
         break;
     }
@@ -161,6 +150,14 @@ class _PropertyWorkspaceScreenState extends ConsumerState<PropertyWorkspaceScree
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
+          indicatorSize: TabBarIndicatorSize.label,
+          indicatorPadding: const EdgeInsets.symmetric(vertical: 8),
+          indicator: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          dividerColor: Colors.transparent,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 16),
           tabs: const [
             Tab(text: 'Rooms & Beds'),
             Tab(text: 'Tenants'),

@@ -4,6 +4,7 @@ import '../../core/format.dart';
 import '../../core/models/complaint_models.dart';
 import '../../core/providers/api_providers.dart';
 import '../../core/widgets/async_value_view.dart';
+import '../../core/widgets/status_badge.dart';
 import '../owner/complaints/complaints_list_screen.dart' show complaintStatusColor;
 import 'tenant_providers.dart';
 
@@ -53,11 +54,7 @@ class _TenantComplaintDetailScreenState extends ConsumerState<TenantComplaintDet
         data: (context, c) => ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Chip(
-              label: Text(titleCase(c.status)),
-              backgroundColor: complaintStatusColor(context, c.status).withValues(alpha: 0.15),
-              labelStyle: TextStyle(color: complaintStatusColor(context, c.status)),
-            ),
+            StatusBadge(label: titleCase(c.status), color: complaintStatusColor(context, c.status)),
             const SizedBox(height: 12),
             Text(c.title, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 4),

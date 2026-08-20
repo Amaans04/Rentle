@@ -5,6 +5,7 @@ import '../../../core/models/complaint_models.dart';
 import '../../../core/models/user_models.dart';
 import '../../../core/providers/api_providers.dart';
 import '../../../core/widgets/async_value_view.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../owner_providers.dart';
 import 'complaint_transitions.dart';
 import 'complaints_list_screen.dart' show complaintStatusColor, priorityColor;
@@ -88,17 +89,9 @@ class _ComplaintDetailScreenState extends ConsumerState<ComplaintDetailScreen> {
               children: [
                 Row(
                   children: [
-                    Chip(
-                      label: Text(titleCase(c.status)),
-                      backgroundColor: complaintStatusColor(context, c.status).withValues(alpha: 0.15),
-                      labelStyle: TextStyle(color: complaintStatusColor(context, c.status)),
-                    ),
+                    StatusBadge(label: titleCase(c.status), color: complaintStatusColor(context, c.status)),
                     const SizedBox(width: 8),
-                    Chip(
-                      label: Text(c.priority),
-                      backgroundColor: priorityColor(context, c.priority).withValues(alpha: 0.15),
-                      labelStyle: TextStyle(color: priorityColor(context, c.priority)),
-                    ),
+                    StatusBadge(label: c.priority, color: priorityColor(context, c.priority)),
                   ],
                 ),
                 const SizedBox(height: 12),

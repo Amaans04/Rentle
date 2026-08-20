@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/property_models.dart';
 import '../../../core/providers/api_providers.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/async_value_view.dart';
 
 // OCCUPIED deliberately excluded — server rejects manual transitions into or
@@ -9,10 +10,21 @@ import '../../../core/widgets/async_value_view.dart';
 const _manualStatuses = ['VACANT', 'RESERVED', 'BLOCKED', 'MAINTENANCE', 'CLEANING'];
 
 class BedStatusSheet extends ConsumerStatefulWidget {
-  const BedStatusSheet({super.key, required this.orgId, required this.bed});
+  const BedStatusSheet({super.key, required this.orgId, required this.bed, required this.saving});
 
   final String orgId;
   final Bed bed;
+  final ValueNotifier<bool> saving;
+
+  static Future<bool?> show(BuildContext context, {required String orgId, required Bed bed}) {
+    final saving = ValueNotifier(false);
+    return AppBottomSheet.show<bool>(
+      context,
+      title: 'Bed ${bed.bedLabel} status',
+      saving: saving,
+      builder: (_) => BedStatusSheet(orgId: orgId, bed: bed, saving: saving),
+    ).whenComplete(saving.dispose);
+  }
 
   @override
   ConsumerState<BedStatusSheet> createState() => _BedStatusSheetState();
@@ -22,7 +34,12 @@ class _BedStatusSheetState extends ConsumerState<BedStatusSheet> {
   late String _status = _manualStatuses.contains(widget.bed.status) ? widget.bed.status : 'VACANT';
   final _blockedReason = TextEditingController();
   DateTime? _reservedUntil;
-  bool _saving = false;
+
+  @override
+  void dispose() {
+    _blockedReason.dispose();
+    super.dispose();
+  }
 
   Future<void> _save() async {
     if (_status == 'RESERVED' && _reservedUntil == null) {
@@ -33,7 +50,7 @@ class _BedStatusSheetState extends ConsumerState<BedStatusSheet> {
       showErrorSnackBar(context, 'A reason is required to block a bed.');
       return;
     }
-    setState(() => _saving = true);
+    widget.saving.value = true;
     try {
       final api = ref.read(apiClientProvider);
       await api.dio.patch(
@@ -48,78 +65,68 @@ class _BedStatusSheetState extends ConsumerState<BedStatusSheet> {
     } catch (e) {
       if (mounted) showErrorSnackBar(context, e);
     } finally {
-      if (mounted) setState(() => _saving = false);
+      widget.saving.value = false;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.bed.status == 'OCCUPIED') {
-      return Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.info_outline, size: 32),
-            const SizedBox(height: 12),
-            Text('Bed ${widget.bed.bedLabel} is occupied', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            const Text(
-              'Its status changes automatically with the tenancy — use notice / move-out / transfer on the tenant instead.',
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.info_outline, size: 32, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(height: 12),
+          const Text(
+            'Its status changes automatically with the tenancy — use notice / move-out / transfer on the tenant instead.',
+            textAlign: TextAlign.center,
+          ),
+        ],
       );
     }
 
-    return Padding(
-      padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: MediaQuery.of(context).viewInsets.bottom + 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('Bed ${widget.bed.bedLabel} status', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            initialValue: _status,
-            decoration: const InputDecoration(labelText: 'Status'),
-            items: _manualStatuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-            onChanged: (v) => setState(() => _status = v ?? _status),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DropdownButtonFormField<String>(
+          initialValue: _status,
+          decoration: const InputDecoration(labelText: 'Status'),
+          items: _manualStatuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+          onChanged: (v) => setState(() => _status = v ?? _status),
+        ),
+        if (_status == 'RESERVED') ...[
+          const SizedBox(height: 12),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(_reservedUntil == null ? 'Pick reserved-until date' : 'Until ${_reservedUntil!.toLocal()}'.split(' ')[0]),
+            trailing: const Icon(Icons.calendar_today),
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: DateTime.now().add(const Duration(days: 7)),
+                firstDate: DateTime.now(),
+                lastDate: DateTime.now().add(const Duration(days: 90)),
+              );
+              if (picked != null) setState(() => _reservedUntil = picked);
+            },
           ),
-          if (_status == 'RESERVED') ...[
-            const SizedBox(height: 12),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(_reservedUntil == null ? 'Pick reserved-until date' : 'Until ${_reservedUntil!.toLocal()}'.split(' ')[0]),
-              trailing: const Icon(Icons.calendar_today),
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime.now().add(const Duration(days: 7)),
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime.now().add(const Duration(days: 90)),
-                );
-                if (picked != null) setState(() => _reservedUntil = picked);
-              },
-            ),
-          ],
-          if (_status == 'BLOCKED') ...[
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _blockedReason,
-              decoration: const InputDecoration(labelText: 'Reason'),
-            ),
-          ],
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: _saving ? null : _save,
-            child: _saving
+        ],
+        if (_status == 'BLOCKED') ...[
+          const SizedBox(height: 12),
+          TextFormField(controller: _blockedReason, decoration: const InputDecoration(labelText: 'Reason')),
+        ],
+        const SizedBox(height: 16),
+        ValueListenableBuilder<bool>(
+          valueListenable: widget.saving,
+          builder: (context, saving, _) => FilledButton(
+            onPressed: saving ? null : _save,
+            child: saving
                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Text('Save'),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

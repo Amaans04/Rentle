@@ -4,8 +4,11 @@ import '../../../core/format.dart';
 import '../../../core/models/notice_models.dart';
 import '../../../core/models/property_models.dart';
 import '../../../core/providers/api_providers.dart';
+import '../../../core/widgets/app_list_card.dart';
 import '../../../core/widgets/async_value_view.dart';
 import '../../../core/widgets/confirm_delete.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/staggered_entrance.dart';
 import '../owner_providers.dart';
 import 'notice_form_sheet.dart';
 
@@ -26,11 +29,7 @@ class NoticesListScreen extends ConsumerWidget {
   PropertyKey get _key => (orgId: orgId, propertyId: property.id);
 
   Future<void> _edit(BuildContext context, WidgetRef ref, Notice notice) async {
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => NoticeFormSheet(orgId: orgId, propertyId: property.id, existing: notice),
-    );
+    final saved = await NoticeFormSheet.show(context, orgId: orgId, propertyId: property.id, existing: notice);
     if (saved == true) ref.invalidate(noticesProvider(_key));
   }
 
@@ -55,32 +54,34 @@ class NoticesListScreen extends ConsumerWidget {
       onRetry: () => ref.invalidate(noticesProvider(_key)),
       data: (context, list) {
         if (list.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Text('No notices yet. Post one to reach every tenant, or just one floor/room.', textAlign: TextAlign.center),
-            ),
+          return const EmptyState(
+            icon: Icons.campaign,
+            title: 'No notices yet',
+            subtitle: 'Post one to reach every tenant, or just one floor/room.',
           );
         }
         return RefreshIndicator(
           onRefresh: () => ref.refresh(noticesProvider(_key).future),
-          child: ListView.separated(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: list.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, index) {
               final notice = list[index];
-              return ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.campaign)),
-                title: Text(notice.title),
-                subtitle: Text('${noticeAudienceLabel(notice.audience)} · ${formatDate(notice.createdAt)}'),
-                trailing: PopupMenuButton<String>(
-                  onSelected: (value) => value == 'edit' ? _edit(context, ref, notice) : _delete(context, ref, notice),
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    PopupMenuItem(value: 'delete', child: Text('Delete')),
-                  ],
+              return StaggeredEntrance(
+                index: index,
+                child: AppListCard(
+                  leadingIcon: Icons.campaign,
+                  title: notice.title,
+                  subtitle: '${noticeAudienceLabel(notice.audience)} · ${formatDate(notice.createdAt)}',
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (value) => value == 'edit' ? _edit(context, ref, notice) : _delete(context, ref, notice),
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(value: 'edit', child: Text('Edit')),
+                      PopupMenuItem(value: 'delete', child: Text('Delete')),
+                    ],
+                  ),
+                  onTap: () => _edit(context, ref, notice),
                 ),
-                onTap: () => _edit(context, ref, notice),
               );
             },
           ),

@@ -129,10 +129,28 @@ class _EstablishAuthStateState extends ConsumerState<_EstablishAuthState> {
   }
 
   void _sync() {
-    final notifier = ref.read(clerkAuthStateHolderProvider.notifier);
-    if (!identical(notifier.state, widget.authState)) {
-      notifier.state = widget.authState;
-    }
+    final authState = widget.authState;
+    if (identical(ref.read(clerkAuthStateHolderProvider), authState)) return;
+    // Deferred to a microtask, NOT written synchronously here — a real,
+    // reproducible crash found 2026-08-12 on a physical device with an
+    // already-restored Clerk session: ClerkAuthBuilder resolves straight to
+    // signedIn on the app's very first build, so this write was happening
+    // mid-build while something elsewhere in the tree was already
+    // subscribed to a provider that depends on it — Riverpod's
+    // "modify a provider while the widget tree was building" guard
+    // correctly refused it, crashing the app before it ever rendered.
+    // A microtask runs after the current build/mount pass fully unwinds,
+    // so it's always safe. IdentityGate (features/identity/identity_gate.dart)
+    // waits for this via `ref.listenManual` instead of assuming it's already
+    // set by the time it mounts, so deferring here doesn't reintroduce the
+    // earlier "apiClientProvider read before sign-in was established" bug.
+    Future.microtask(() {
+      if (!mounted) return;
+      final notifier = ref.read(clerkAuthStateHolderProvider.notifier);
+      if (!identical(notifier.state, authState)) {
+        notifier.state = authState;
+      }
+    });
   }
 
   @override

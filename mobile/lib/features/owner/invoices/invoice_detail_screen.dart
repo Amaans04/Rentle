@@ -4,6 +4,7 @@ import '../../../core/format.dart';
 import '../../../core/models/invoice_models.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/async_value_view.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../owner_providers.dart';
 import 'invoices_list_screen.dart' show invoiceStatusColor;
 import 'record_payment_sheet.dart';
@@ -38,11 +39,7 @@ class InvoiceDetailScreen extends ConsumerWidget {
                     children: [
                       Row(
                         children: [
-                          Chip(
-                            label: Text(titleCase(inv.status)),
-                            backgroundColor: invoiceStatusColor(context, inv.status).withValues(alpha: 0.15),
-                            labelStyle: TextStyle(color: invoiceStatusColor(context, inv.status)),
-                          ),
+                          StatusBadge(label: titleCase(inv.status), color: invoiceStatusColor(context, inv.status)),
                           const Spacer(),
                           Text(formatMoney(inv.totalAmount), style: Theme.of(context).textTheme.titleLarge),
                         ],
@@ -90,10 +87,10 @@ class InvoiceDetailScreen extends ConsumerWidget {
       floatingActionButton: currentBalance > 0
           ? FloatingActionButton.extended(
               onPressed: () async {
-                final recorded = await showModalBottomSheet<bool>(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => RecordPaymentSheet(orgId: orgId, invoice: detail.valueOrNull?.invoice ?? invoice),
+                final recorded = await RecordPaymentSheet.show(
+                  context,
+                  orgId: orgId,
+                  invoice: detail.valueOrNull?.invoice ?? invoice,
                 );
                 if (recorded == true) ref.invalidate(invoiceDetailProvider(key));
               },

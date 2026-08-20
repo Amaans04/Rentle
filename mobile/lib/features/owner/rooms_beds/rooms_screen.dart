@@ -6,6 +6,9 @@ import '../../../core/providers/api_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/async_value_view.dart';
 import '../../../core/widgets/confirm_delete.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/staggered_entrance.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../owner_providers.dart';
 import 'bed_form_sheet.dart';
 import 'bed_status_sheet.dart';
@@ -45,11 +48,7 @@ class RoomsScreen extends ConsumerWidget {
   FloorRoomsKey get _key => (orgId: orgId, propertyId: property.id, floorId: floor.id);
 
   Future<void> _editRoom(BuildContext context, WidgetRef ref, Room room) async {
-    final edited = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => RoomFormSheet(orgId: orgId, existing: room),
-    );
+    final edited = await RoomFormSheet.show(context, orgId: orgId, existing: room);
     if (edited == true) ref.invalidate(roomsForFloorProvider(_key));
   }
 
@@ -70,11 +69,7 @@ class RoomsScreen extends ConsumerWidget {
   }
 
   Future<void> _editBed(BuildContext context, WidgetRef ref, Bed bed) async {
-    final edited = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => BedFormSheet(orgId: orgId, existing: bed),
-    );
+    final edited = await BedFormSheet.show(context, orgId: orgId, existing: bed);
     if (edited == true) ref.invalidate(roomsForFloorProvider(_key));
   }
 
@@ -105,12 +100,7 @@ class RoomsScreen extends ConsumerWidget {
         onRetry: () => ref.invalidate(roomsForFloorProvider(_key)),
         data: (context, list) {
           if (list.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('No rooms on this floor yet.', textAlign: TextAlign.center),
-              ),
-            );
+            return const EmptyState(icon: Icons.meeting_room, title: 'No rooms yet', subtitle: 'Add one to this floor to get started.');
           }
           return RefreshIndicator(
             onRefresh: () => ref.refresh(roomsForFloorProvider(_key).future),
@@ -119,79 +109,77 @@ class RoomsScreen extends ConsumerWidget {
               itemCount: list.length,
               itemBuilder: (context, index) {
                 final room = list[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: ExpansionTile(
-                    title: Text('Room ${room.roomNumber}'),
-                    subtitle: Text('${room.roomType} · ${room.sharingCapacity} bed(s) · ${formatMoney(room.rentAmount)}/mo'),
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (value) => value == 'edit' ? _editRoom(context, ref, room) : _deleteRoom(context, ref, room),
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(value: 'edit', child: Text('Edit room')),
-                        PopupMenuItem(value: 'delete', child: Text('Delete room')),
-                      ],
-                    ),
-                    children: [
-                      ...room.beds.map(
-                        (bed) => ListTile(
-                          dense: true,
-                          leading: CircleAvatar(
-                            radius: 12,
-                            backgroundColor: bedStatusColor(context, bed.status),
-                            child: Text(bed.bedLabel, style: const TextStyle(fontSize: 10, color: Colors.white)),
-                          ),
-                          title: Text('Bed ${bed.bedLabel}'),
-                          subtitle: Text(titleCase(bed.status)),
-                          trailing: PopupMenuButton<String>(
-                            onSelected: (value) async {
-                              switch (value) {
-                                case 'status':
-                                  final changed = await showModalBottomSheet<bool>(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    builder: (_) => BedStatusSheet(orgId: orgId, bed: bed),
-                                  );
-                                  if (changed == true) ref.invalidate(roomsForFloorProvider(_key));
-                                  break;
-                                case 'edit':
-                                  await _editBed(context, ref, bed);
-                                  break;
-                                case 'delete':
-                                  await _deleteBed(context, ref, bed);
-                                  break;
-                              }
-                            },
-                            itemBuilder: (context) => const [
-                              PopupMenuItem(value: 'status', child: Text('Change status')),
-                              PopupMenuItem(value: 'edit', child: Text('Edit bed')),
-                              PopupMenuItem(value: 'delete', child: Text('Delete bed')),
-                            ],
+                return StaggeredEntrance(
+                  index: index,
+                  child: Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    clipBehavior: Clip.antiAlias,
+                    child: ExpansionTile(
+                      title: Text('Room ${room.roomNumber}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                      subtitle: Text('${room.roomType} · ${room.sharingCapacity} bed(s) · ${formatMoney(room.rentAmount)}/mo'),
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (value) => value == 'edit' ? _editRoom(context, ref, room) : _deleteRoom(context, ref, room),
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(value: 'edit', child: Text('Edit room')),
+                          PopupMenuItem(value: 'delete', child: Text('Delete room')),
+                        ],
+                      ),
+                      children: [
+                        ...room.beds.map(
+                          (bed) => ListTile(
+                            dense: true,
+                            title: Text('Bed ${bed.bedLabel}'),
+                            subtitle: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: StatusBadge(label: titleCase(bed.status), color: bedStatusColor(context, bed.status)),
+                              ),
+                            ),
+                            trailing: PopupMenuButton<String>(
+                              onSelected: (value) async {
+                                switch (value) {
+                                  case 'status':
+                                    final changed = await BedStatusSheet.show(context, orgId: orgId, bed: bed);
+                                    if (changed == true) ref.invalidate(roomsForFloorProvider(_key));
+                                    break;
+                                  case 'edit':
+                                    await _editBed(context, ref, bed);
+                                    break;
+                                  case 'delete':
+                                    await _deleteBed(context, ref, bed);
+                                    break;
+                                }
+                              },
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(value: 'status', child: Text('Change status')),
+                                PopupMenuItem(value: 'edit', child: Text('Edit bed')),
+                                PopupMenuItem(value: 'delete', child: Text('Delete bed')),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: TextButton.icon(
-                            icon: const Icon(Icons.bed),
-                            label: const Text('Add bed'),
-                            onPressed: () async {
-                              final created = await showModalBottomSheet<bool>(
-                                context: context,
-                                isScrollControlled: true,
-                                builder: (_) => BedFormSheet(
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              icon: const Icon(Icons.bed),
+                              label: const Text('Add bed'),
+                              onPressed: () async {
+                                final created = await BedFormSheet.show(
+                                  context,
                                   orgId: orgId,
                                   roomId: room.id,
                                   suggestedLabel: String.fromCharCode(65 + room.beds.length),
-                                ),
-                              );
-                              if (created == true) ref.invalidate(roomsForFloorProvider(_key));
-                            },
+                                );
+                                if (created == true) ref.invalidate(roomsForFloorProvider(_key));
+                              },
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 );
               },
@@ -201,11 +189,7 @@ class RoomsScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          final created = await showModalBottomSheet<bool>(
-            context: context,
-            isScrollControlled: true,
-            builder: (_) => RoomFormSheet(orgId: orgId, propertyId: property.id, floorId: floor.id),
-          );
+          final created = await RoomFormSheet.show(context, orgId: orgId, propertyId: property.id, floorId: floor.id);
           if (created == true) ref.invalidate(roomsForFloorProvider(_key));
         },
         icon: const Icon(Icons.add),
