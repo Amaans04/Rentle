@@ -2,6 +2,26 @@
 
 Living doc. Updated at the end of every phase. Full plan: `~/.claude/plans/hey-hey-how-are-fuzzy-bee.md`.
 
+## HIBERNATED as of 2026-08-20 — read this first
+
+Project is paused indefinitely, not abandoned. Everything below this line is
+historical and still accurate as of the pause. All local build artifacts,
+caches, and `node_modules` were deleted to save disk space — they are fully
+regenerable and hold no project state. Nothing else was touched or deleted.
+
+**To resume:**
+1. `cd server && npm install` (rebuilds `node_modules`, `dist/`)
+2. `cd mobile && flutter pub get` (rebuilds `.dart_tool/`, `build/`, plugin registrant files, Gradle cache)
+3. Confirm `server/.env` still has the right values (it was left in place, untouched, git-ignored) — DB/Clerk/Supabase creds don't rotate on their own, but double-check nothing expired
+4. Read the last "Mobile:" and "Server:" sections below for exactly where feature work stopped
+
+**Where it actually stopped (last commit `c1551b2`, mobile UI revamp round 2):**
+- Server (Phases 0–4): complete, deployed on Render (`https://rentle-gdys.onrender.com`), CI green. No open work.
+- Mobile: full owner+tenant loop, staff management, notices, tenant discovery all built. A second visual-design pass (shared widgets, Plus Jakarta Sans, large titles, a real bottom-sheet duplicate-save fix) is committed but **not yet verified on a real device or through a real authenticated flow** — it only got as far as an iOS Simulator check via a throwaway harness, because the Clerk `pk_test_...` publishable key was never supplied. That's the actual next step whenever this picks back up: get the key, run it for real, then decide what's next (Phase 6 web dashboard, or the deferred CRM/booking/accounting/live-payments scope in plan §5).
+- Nothing is uncommitted. `git log` on `main` is the full source of truth for what's built.
+
+---
+
 ## Phase 0 — Foundations: COMPLETE
 
 **Goal:** repo scaffold, Supabase + Clerk projects, Prisma schema v1, Fastify auth pipeline, RLS proven, cross-org isolation test suite in CI, `server/` deployed to Render. **All exit criteria met — see plan §4.**
